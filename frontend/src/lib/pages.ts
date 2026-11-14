@@ -17,6 +17,8 @@ export function canSee(user: Pick<UserInfo, "permissions" | "pages">, pathname: 
     case "/data":
     case "/intelligence":
       return user.pages.includes(first.slice(1));
+    case "/thanh-vien":
+      return user.pages.includes("members");
     case "/tong-quan":
       return user.pages.includes("overview");
     case "/nen-tang":

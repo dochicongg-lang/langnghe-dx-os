@@ -23,6 +23,7 @@ export const helpNav: NavItem = { href: "/help", icon: "help", title: "Trợ gi�
 export const platformNav: NavItem[] = [
   { href: "/nen-tang", icon: "layers", title: "Cấu trúc nền tảng", desc: "Gốm và lụa trên một nền tảng" },
   { href: "/tong-quan", icon: "gauge", title: "Tổng quan", desc: "Hồ sơ chờ lâu, chất lượng mẻ" },
+  { href: "/thanh-vien", icon: "user", title: "Thành viên", desc: "Mời và quản lý tài khoản" },
   { href: "/process", icon: "flow", title: "Việc đang xử lý", desc: "Các bước của hồ sơ" },
   { href: "/data", icon: "database", title: "Dữ liệu", desc: "Lưu trữ và nhật ký" },
   { href: "/intelligence", icon: "chart", title: "Phân tích", desc: "Mẻ nung, mẻ nhuộm và trợ lý hỏi đáp" },

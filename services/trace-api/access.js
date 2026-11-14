@@ -31,6 +31,15 @@ function validate(cfg) {
       if (!RANK[scope]) throw new Error(`access.json: phạm vi không hợp lệ ở ${action}/${role}: ${scope}`);
     }
   }
+  for (const [role, targets] of Object.entries(cfg.invitable ?? {})) {
+    if (!cfg.roles[role]) throw new Error(`access.json: invitable nhắc tới role không có: ${role}`);
+    if (!Array.isArray(targets)) throw new Error(`access.json: invitable.${role} phải là danh sách vai trò`);
+    for (const t of targets) {
+      if (!cfg.roles[t]) throw new Error(`access.json: invitable.${role} nhắc tới role không có: ${t}`);
+      if (cfg.roles[t].alias) throw new Error(`access.json: invitable.${role} không được dùng role bí danh: ${t}`);
+      if (cfg.roles[t].api === false) throw new Error(`access.json: invitable.${role} không được mời vai trò thiết bị: ${t}`);
+    }
+  }
   for (const [page, roles] of Object.entries(cfg.pages ?? {})) {
     if (!Array.isArray(roles)) throw new Error(`access.json: pages.${page} phải là danh sách vai trò`);
     for (const r of roles) if (!cfg.roles[r]) throw new Error(`access.json: pages.${page} nhắc tới role không có: ${r}`);

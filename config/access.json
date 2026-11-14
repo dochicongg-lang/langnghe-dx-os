@@ -15,9 +15,17 @@
     "process": ["admin", "coop-officer", "ocop-officer"],
     "data": ["admin"],
     "overview": ["admin", "coop-officer", "ocop-officer"],
+    "members": ["admin", "coop-officer"],
     "intelligence": ["admin", "coop-officer", "ocop-officer", "readonly"]
   },
+  "_invitable_doc": "Vai trò mà mỗi vai trò được MỜI (kết hợp quyền member.invite). Vai trò cán bộ chỉ quản trị mời được (bước phê duyệt vai trò cán bộ); cán bộ HTX chỉ mời nghệ nhân vào HTX của mình.",
+  "invitable": {
+    "admin": ["producer", "coop-officer", "ocop-officer", "readonly"],
+    "coop-officer": ["producer"]
+  },
   "permissions": {
+    "member.invite": { "admin": "all", "coop-officer": "coop" },
+    "member.lock": { "admin": "all", "coop-officer": "coop" },
     "overview.read": { "admin": "all", "ocop-officer": "all", "coop-officer": "coop" },
     "product.read": { "admin": "all", "readonly": "all", "ocop-officer": "all", "coop-officer": "coop", "producer": "coop" },
     "product.create": { "admin": "all", "coop-officer": "coop", "producer": "self" },

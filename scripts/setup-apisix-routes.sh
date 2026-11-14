@@ -279,4 +279,25 @@ curl -fsS -X PUT "$ADMIN/routes/trace-public" -H "X-API-KEY: $APISIX_ADMIN_KEY" 
   "upstream": { "type": "roundrobin", "nodes": { "trace-api:3000": 1 } }
 }
 JSON
-echo "OK: route /api/trace/* (JWT) và /api/public/trace/* (công khai, giới hạn tần suất) đã sẵn sàng."
+# Nhận lời mời thành viên (công khai, không JWT vì người được mời chưa có tài khoản): xem thông tin lời mời và đặt mật khẩu.
+# Giới hạn tần suất chặt hơn route tra cứu; mã mời dài 256 bit nên không dò được.
+curl -fsS -X PUT "$ADMIN/routes/invite-public" -H "X-API-KEY: $APISIX_ADMIN_KEY" -d @- <<JSON >/dev/null
+{
+  "name": "invite-public",
+  "uri": "/api/public/invite/*",
+  "methods": ["GET", "POST", "OPTIONS"],
+  "plugins": {
+    ${AUDIT_LOGGER},
+    "cors": {
+      "allow_origins": "${CORS_ORIGIN}",
+      "allow_methods": "GET,POST,OPTIONS",
+      "allow_headers": "Content-Type",
+      "max_age": 3600
+    },
+    "limit-req": { "rate": 2, "burst": 5, "key_type": "var", "key": "remote_addr", "rejected_code": 429 },
+    "proxy-rewrite": { "regex_uri": ["^/api/public/invite/(.*)", "/invite/\$1"] }
+  },
+  "upstream": { "type": "roundrobin", "nodes": { "trace-api:3000": 1 } }
+}
+JSON
+echo "OK: route /api/trace/* (JWT), /api/public/trace/* và /api/public/invite/* (công khai, giới hạn tần suất) đã sẵn sàng."

@@ -58,6 +58,22 @@ ensure_coop_mapper() {
   done
 }
 
+# Client dịch vụ cho tính năng mời thành viên của trace-api: service account CHỈ có quyền quản lý người dùng của realm
+# (manage-users, query-users, view-users, view-realm để đọc role theo tên). Không phải tài khoản admin Keycloak.
+ensure_members_client() { # clientId, secret
+  local cid="$1" secret="$2" id
+  id=$(kc get clients -r "$R" -q "clientId=$cid" --fields id --format csv --noquotes | tr -d '\r')
+  if [ -z "$id" ]; then
+    kc create clients -r "$R" -s "clientId=$cid" -s enabled=true -s publicClient=false \
+      -s serviceAccountsEnabled=true -s standardFlowEnabled=false -s directAccessGrantsEnabled=false \
+      -s "secret=$secret" >/dev/null
+  else
+    kc update "clients/$id" -r "$R" -s "secret=$secret" >/dev/null
+  fi
+  kc add-roles -r "$R" --uusername "service-account-$cid" --cclientid realm-management \
+    --rolename manage-users --rolename query-users --rolename view-users --rolename view-realm
+}
+
 # Tạo (hoặc cập nhật khóa của) client gateway IoT: service account, chỉ có role iot-writer.
 # Token có audience = client của MinIO/APISIX và claim "policy"; MinIO chỉ cho ghi vào iot/service-account-<client>/.
 ensure_iot_client() { # clientId, secret

@@ -28,6 +28,7 @@ ensure_coop_mapper
 
 # Gateway IoT mặc định (service account, không đăng nhập bằng người dùng)
 ensure_iot_client "$KEYCLOAK_IOT_CLIENT_ID" "$KEYCLOAK_IOT_CLIENT_SECRET"
+ensure_members_client "${KC_MEMBERS_CLIENT:-dxos-members}" "${KC_MEMBERS_SECRET:?thiếu KC_MEMBERS_SECRET trong .env (chạy bash scripts/upgrade.sh để tự bổ sung)}" # tính năng mời thành viên
 
 kc add-roles -r "$R" --uusername tester --rolename editor
 ensure_user viewer viewer readonly # user thử chỉ xem (đổi/xóa trước khi triển khai thật)

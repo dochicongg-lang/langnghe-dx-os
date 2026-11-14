@@ -15,7 +15,11 @@ const nextConfig: NextConfig = {
   // PUBLIC_API_PROXY_TARGET: địa chỉ cổng gác nhìn từ máy chủ Next (mặc định http://localhost:9080).
   async rewrites() {
     const target = process.env.PUBLIC_API_PROXY_TARGET ?? `http://localhost:${process.env.APISIX_GATEWAY_PORT ?? 9080}`;
-    return [{ source: "/api/public/trace/:code", destination: `${target}/api/public/trace/:code` }];
+    return [
+      { source: "/api/public/trace/:code", destination: `${target}/api/public/trace/:code` },
+      // trang nhận lời mời (/moi/<mã>) cũng gọi API cùng nguồn gốc
+      { source: "/api/public/invite/:path*", destination: `${target}/api/public/invite/:path*` },
+    ];
   },
   turbopack: {
     rules: {
