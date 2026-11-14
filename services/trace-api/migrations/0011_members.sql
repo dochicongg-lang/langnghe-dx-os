@@ -1,3 +1,5 @@
+-- SPDX-License-Identifier: Apache-2.0
+-- Copyright 2026 The Làng Nghề Số contributors
 -- Mời thành viên: lời mời một lần, có hạn. Chỉ lưu BĂM của mã trong liên kết (không lưu mã gốc), nên ai đọc được cơ sở dữ liệu cũng không dựng lại được liên kết.
 -- Chỉ thêm bảng mới. Trạng thái "hết hạn" tính lúc đọc từ expires_at, không lưu.
 CREATE TABLE IF NOT EXISTS invitations (
