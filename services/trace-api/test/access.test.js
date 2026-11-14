@@ -110,13 +110,13 @@ test("trang nền tảng theo vai trò (đúng người đúng việc)", () => {
   assert.equal(access.scopeFor(CFG, ["ocop-officer"], "overview.read"), "all");
   assert.equal(access.scopeFor(CFG, ["producer"], "overview.read"), null);
   assert.equal(access.scopeFor(CFG, ["readonly"], "overview.read"), null);
-  assert.deepEqual(p(["coop-officer"]), ["intelligence", "overview", "process"]);
+  assert.deepEqual(p(["coop-officer"]), ["intelligence", "members", "overview", "process"]);
   assert.deepEqual(p(["ocop-officer"]), ["intelligence", "overview", "process"]);
-  assert.deepEqual(p(["admin"]), ["data", "intelligence", "overview", "platform", "process"]);
+  assert.deepEqual(p(["admin"]), ["data", "intelligence", "members", "overview", "platform", "process"]);
   assert.deepEqual(p(["editor"]), p(["admin"])); // bí danh tạm
   assert.deepEqual(p(["iot-writer"]), []);
   assert.deepEqual(p(["role-la"]), []);
-  assert.deepEqual(p(["producer", "coop-officer"]), ["intelligence", "overview", "process"]); // nhiều vai trò: hợp của các vai trò
+  assert.deepEqual(p(["producer", "coop-officer"]), ["intelligence", "members", "overview", "process"]); // nhiều vai trò: hợp của các vai trò
   assert.throws(() => access.validate({ roles: { a: {} }, permissions: {}, pages: { x: ["b"] } }), /role không có/);
   assert.throws(() => access.validate({ roles: { a: {} }, permissions: {}, pages: { x: "a" } }), /danh sách/);
 });

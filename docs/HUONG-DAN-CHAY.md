@@ -450,6 +450,22 @@ Tạo gói phát hành bằng `bash scripts/make-release-archive.sh 0.3.0` (ki�
 - **Ảnh chụp minh họa** (`frontend/public/photos/`, giấy phép Pexels) không đi kèm kho mã. Muốn có ảnh khi trình diễn, đặt các tệp theo bảng trong `frontend/public/photos/CREDITS.md`; thiếu ảnh thì giao diện dùng hình vẽ hoặc ẩn ảnh.
 - **Dựng lại sạch dữ liệu thử:** `bash scripts/backup.sh`, `docker compose down -v`, `bash scripts/upgrade.sh` (Keycloak khởi động lại mất khoảng 3 phút trên máy ít RAM, lần chạy đầu có thể báo unhealthy: chờ khỏe rồi chạy lại), rồi `node scripts/seed-demo.js`.
 
+## 22. Thêm người dùng mới (mời thành viên)
+
+Không cần vào Keycloak bằng tay. Người có quyền mời mở trang **Thành viên** ở thanh bên:
+
+1. Chọn vai trò (và hợp tác xã nếu là quản trị), có thể ghi tên người được mời, bấm **Tạo liên kết mời**.
+2. Gửi liên kết (hoặc mã QR) cho người đó qua Zalo hay tin nhắn. Liên kết chỉ hiện **một lần** và dùng được **một lần**, hết hạn sau `MEMBERS_INVITE_DAYS` ngày (mặc định 7).
+3. Người được mời mở liên kết, tự nhập họ tên, tên đăng nhập và mật khẩu. Người mời không biết mật khẩu. Tài khoản mới có đúng vai trò và hợp tác xã đã chọn.
+
+Ai mời được ai: quản trị mời mọi vai trò (nghệ nhân, cán bộ HTX, cán bộ OCOP, chỉ xem); cán bộ HTX chỉ mời **nghệ nhân vào chính HTX của mình**; cán bộ OCOP và nghệ nhân không mời được. Vai trò cán bộ chỉ quản trị mời được, đó là bước phê duyệt vai trò cán bộ. Cấu hình ở `config/access.json` (mục `invitable` và quyền `member.invite`, `member.lock`).
+
+Trang này cũng cho **khóa/mở khóa** tài khoản (khóa là tạm dừng và đăng xuất ngay, không xóa nên hồ sơ cũ vẫn đúng người) và **thu hồi** lời mời chưa dùng. Tài khoản cán bộ HTX bắt buộc cài OTP ở lần đăng nhập đầu như các tài khoản cán bộ khác.
+
+Chưa có: gửi lời mời qua email, số điện thoại hay Zalo (cần dịch vụ ngoài), tự đăng ký công khai, quên mật khẩu (cần máy chủ thư).
+
+Kiểm chứng thật: `node scripts/check-members.js` (cần chưa cài OTP cho `htxlua`).
+
 ## 20. Đưa hệ thống ra Internet
 
 Xem [TRIEN-KHAI-INTERNET.md](TRIEN-KHAI-INTERNET.md). Trước tiên chạy `node scripts/prod-check.js` để biết hệ thống còn thiếu gì (mật khẩu mẫu, khóa dữ liệu chưa ở chế độ COMPLIANCE, HTTPS, chế độ Keycloak, tài khoản thử...). Hệ thống hiện mới chạy thật trên máy phát triển, chưa triển khai thật lên Internet.

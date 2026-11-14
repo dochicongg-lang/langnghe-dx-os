@@ -35,6 +35,8 @@ const lifecycle = require("./lifecycle");
 const kiln = require("./kiln");
 const sectors = require("./sectors");
 const overview = require("./overview");
+const members = require("./members");
+const { createKeycloakAdmin, KeycloakAdminError } = require("./keycloak-admin");
 const audit = require("./audit");
 const scan = require("./scan");
 const reminders = require("./reminders");
@@ -376,6 +378,120 @@ async function kilnInsights(user) {
   }
   const d = kiln.pickProfile(KILN, null);
   return { profile: { id: d.id, name: d.name, verified: d.verified === true, note: d.note ?? "" }, summary, runs };
+}
+
+// ---------- Mời và quản lý thành viên ----------
+// trace-api tạo tài khoản qua client dịch vụ chỉ có quyền quản lý người dùng của realm (không phải admin Keycloak). Không có khóa thì tắt tính năng.
+const kcAdmin = process.env.KC_MEMBERS_SECRET
+  ? createKeycloakAdmin({ baseUrl: process.env.KEYCLOAK_INTERNAL_URL ?? "http://keycloak:8080", realm: process.env.KEYCLOAK_REALM ?? "dxos", clientId: process.env.KC_MEMBERS_CLIENT ?? "dxos-members", clientSecret: process.env.KC_MEMBERS_SECRET })
+  : null;
+const INVITE_ORIGIN = (process.env.MEMBERS_INVITE_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "");
+const INVITE_DAYS = Math.max(1, Number(process.env.MEMBERS_INVITE_DAYS ?? 7));
+
+/** Đổi lỗi của mô-đun thành viên và Keycloak sang HttpError để trả đúng mã. */
+async function asHttp(fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof members.MemberError || e instanceof KeycloakAdminError) throw new HttpError(e.status, e.message);
+    throw e;
+  }
+}
+/** Quyền theo phạm vi KHÔNG gắn tài nguyên cụ thể (mời, khóa): có phạm vi là được, phạm vi coop do từng hàm tự áp dụng. */
+function needScope(user, action) {
+  if (!access.canApi(ACCESS, user.roles)) throw new HttpError(403, "Vai trò của bạn không dùng được API này");
+  const scope = access.scopeFor(ACCESS, user.roles, action);
+  if (!scope) throw new HttpError(403, "Vai trò của bạn không có quyền thực hiện thao tác này");
+  if (scope === "coop" && !user.coop) throw new HttpError(403, "Tài khoản của bạn chưa thuộc HTX nào (thiếu thuộc tính coop), liên hệ quản trị");
+  return scope;
+}
+const needKc = () => {
+  if (!kcAdmin) throw new HttpError(503, "Chưa cấu hình tính năng mời thành viên (thiếu KC_MEMBERS_SECRET, chạy bash scripts/upgrade.sh)");
+  return kcAdmin;
+};
+
+const inviteView = (r, now = new Date()) => ({ id: Number(r.id), role: r.role, coop: r.coop, note: r.note, invited_by: r.invited_by, status: members.inviteStatus(r, now), created_at: r.created_at, expires_at: r.expires_at, accepted_username: r.accepted_username, accepted_at: r.accepted_at });
+
+/** Danh sách lời mời và thành viên trong phạm vi của người xem. */
+async function listMembers(user) {
+  const scope = needScope(user, "member.invite");
+  const kc = needKc();
+  const coopRows = (await pool.query("SELECT code, name FROM cooperatives ORDER BY code")).rows;
+  const inv = await pool.query(`SELECT * FROM invitations ${scope === "all" ? "" : "WHERE coop = $1"} ORDER BY id DESC LIMIT 100`, scope === "all" ? [] : [user.coop]);
+  const people = await asHttp(() => kc.listMembers({ coop: scope === "all" ? null : user.coop }));
+  const now = new Date();
+  return {
+    scope,
+    coops: scope === "all" ? coopRows : coopRows.filter((c) => c.code === user.coop),
+    invitable: members.invitableRoles(ACCESS, user.roles).map((r) => ({ role: r, desc: ACCESS.roles[r].desc, needs_coop: members.roleNeedsCoop(ACCESS, r) })),
+    invitations: inv.rows.map((r) => inviteView(r, now)),
+    members: people.map((p) => ({ username: p.username, name: p.name, coop: p.coop, roles: p.roles, enabled: p.enabled, created_at: p.created_at, can_manage: members.canManage(ACCESS, user, p) })),
+  };
+}
+
+/** Tạo lời mời: trả liên kết MỘT LẦN (chỉ băm của mã được lưu). */
+async function createInvitation(user, body) {
+  needScope(user, "member.invite");
+  needKc();
+  const codes = new Set((await pool.query("SELECT code FROM cooperatives")).rows.map((r) => r.code));
+  const chk = await asHttp(async () => members.checkInvite(ACCESS, user, body, codes));
+  const note = typeof body?.note === "string" ? body.note.trim().slice(0, 120) : "";
+  const token = members.newToken();
+  const expires = new Date(Date.now() + INVITE_DAYS * 86_400_000);
+  const { rows } = await pool.query(
+    "INSERT INTO invitations (token_hash, role, coop, note, invited_by, expires_at) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *",
+    [members.hashToken(token), chk.role, chk.coop, note || null, user.name, expires],
+  );
+  return { ...inviteView(rows[0]), link: `${INVITE_ORIGIN}/moi/${token}` };
+}
+
+async function revokeInvitation(user, id) {
+  const scope = needScope(user, "member.invite");
+  const row = (await pool.query("SELECT * FROM invitations WHERE id = $1", [Number(id)])).rows[0];
+  if (!row || (scope === "coop" && row.coop !== user.coop)) throw new HttpError(404, "Không tìm thấy lời mời");
+  if (row.status !== "pending") throw new HttpError(409, "Lời mời này đã được dùng hoặc đã thu hồi");
+  await pool.query("UPDATE invitations SET status = 'revoked' WHERE id = $1", [row.id]);
+  return inviteView({ ...row, status: "revoked" });
+}
+
+async function setMemberEnabled(user, username, enabled) {
+  needScope(user, "member.lock");
+  const kc = needKc();
+  const target = await asHttp(() => kc.findMember(String(username)));
+  // không lộ sự tồn tại của người ngoài phạm vi
+  if (!target || !members.canManage(ACCESS, user, target)) throw new HttpError(404, "Không tìm thấy thành viên trong phạm vi của bạn");
+  return asHttp(() => kc.setEnabled(target.username, enabled));
+}
+
+/** Thông tin công khai của một lời mời (để trang nhận lời mời hiện đúng vai trò và HTX); mã sai hay hết hạn đều trả "không hợp lệ" như nhau. */
+async function inviteInfo(token) {
+  if (!members.TOKEN_RE.test(token)) return { valid: false };
+  const row = (await pool.query("SELECT i.*, c.name AS coop_name FROM invitations i LEFT JOIN cooperatives c ON c.code = i.coop WHERE token_hash = $1", [members.hashToken(token)])).rows[0];
+  if (!row || members.inviteStatus(row) !== "pending") return { valid: false };
+  return { valid: true, role: row.role, role_desc: ACCESS.roles[row.role]?.desc ?? row.role, coop: row.coop, coop_name: row.coop_name, expires_at: row.expires_at, mfa: ACCESS.roles[row.role]?.mfa === true };
+}
+
+/** Nhận lời mời: người được mời tự đặt tên đăng nhập và mật khẩu (người mời không biết mật khẩu). Một lần dùng. */
+async function acceptInvite(token, body) {
+  const kc = needKc();
+  if (!members.TOKEN_RE.test(token)) throw new HttpError(404, "Lời mời không hợp lệ hoặc đã hết hạn");
+  const info = await asHttp(async () => members.checkAccept(body));
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const row = (await client.query("SELECT * FROM invitations WHERE token_hash = $1 FOR UPDATE", [members.hashToken(token)])).rows[0];
+    if (!row || members.inviteStatus(row) !== "pending") throw new HttpError(404, "Lời mời không hợp lệ hoặc đã hết hạn");
+    if (await asHttp(() => kc.usernameTaken(info.username))) throw new HttpError(409, "Tên đăng nhập này đã có người dùng, hãy chọn tên khác");
+    await asHttp(() => kc.createUser({ ...info, role: row.role, coop: row.coop }));
+    await client.query("UPDATE invitations SET status = 'accepted', accepted_username = $2, accepted_at = now() WHERE id = $1", [row.id, info.username]);
+    await client.query("COMMIT");
+    return { ok: true, username: info.username };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
 }
 
 /** Tổng quan điều hành trong phạm vi quyền overview.read: hồ sơ, mẻ nung/nhuộm 90 ngày, kết quả sắp hết hiệu lực; bảng so sánh HTX chỉ ở phạm vi "all". */
@@ -1172,6 +1288,12 @@ async function route(req, res) {
 
   if (m === "GET" && parts[0] === "healthz") return send(res, 200, { status: "ok" });
 
+  // Nhận lời mời (công khai, qua route riêng của cổng gác có giới hạn tần suất)
+  if (parts[0] === "invite") {
+    if (parts.length === 2 && m === "GET") return send(res, 200, await inviteInfo(parts[1]));
+    if (parts.length === 3 && parts[2] === "accept" && m === "POST") return send(res, 201, await acceptInvite(parts[1], await readJson(req)));
+  }
+
   if (parts[0] === "public" && parts.length === 2 && m === "GET") return send(res, 200, await getProduct(parts[1], { publicView: true }));
 
   if (parts[0] === "me" && parts.length === 1 && m === "GET") {
@@ -1268,6 +1390,15 @@ async function route(req, res) {
     }
     if (parts.length === 2 && parts[1] === "verify" && m === "GET") return send(res, 200, await verifyAudit());
     if (parts.length === 2 && parts[1] === "anchor" && m === "POST") return send(res, 200, (await runAnchor()) ?? { skipped: "empty" });
+  }
+
+  if (parts[0] === "members") {
+    const user = getUser(req);
+    if (!access.canApi(ACCESS, user.roles)) throw new HttpError(403, "Vai trò của bạn không dùng được API này");
+    if (parts.length === 1 && m === "GET") return send(res, 200, await listMembers(user));
+    if (parts.length === 2 && parts[1] === "invitations" && m === "POST") return send(res, 201, await createInvitation(user, await readJson(req)));
+    if (parts.length === 4 && parts[1] === "invitations" && parts[3] === "revoke" && m === "POST") return send(res, 200, await revokeInvitation(user, parts[2]));
+    if (parts.length === 3 && (parts[2] === "lock" || parts[2] === "unlock") && m === "POST") return send(res, 200, await setMemberEnabled(user, parts[1], parts[2] === "unlock"));
   }
 
   if (parts[0] === "overview" && parts.length === 1 && m === "GET") {

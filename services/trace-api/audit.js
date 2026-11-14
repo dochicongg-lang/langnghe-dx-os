@@ -20,6 +20,11 @@ const ACTOR_ROUTES = ["trace-api", "workflow-api"]; // chỉ tin danh tính ở 
 const sha256 = (s) => crypto.createHash("sha256").update(s).digest("hex");
 const clip = (v, n) => String(v ?? "").slice(0, n);
 
+/** Mã trong liên kết mời là bí mật dùng một lần: không ghi vào nhật ký (nhật ký chỉ ghi thêm, không xóa được). */
+function redactPath(p) {
+  return p.replace(/^(\/api\/public\/invite\/)[^/?#]+/, "$1<đã-ẩn>");
+}
+
 /** Chuẩn hóa một dòng nhật ký thô từ http-logger; trả null nếu không hợp lệ. */
 function normalize(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -43,7 +48,7 @@ function normalize(raw) {
     verified: Boolean(actor) && status < 400,
     ip: clip(raw.client_ip, 64),
     method,
-    path: clip(raw.uri, 300),
+    path: redactPath(clip(raw.uri, 300)),
     status,
     route,
     latencyMs: Math.max(0, Math.min(3_600_000, Math.round(Number(raw.request_time) * 1000) || 0)),
