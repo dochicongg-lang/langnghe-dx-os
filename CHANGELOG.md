@@ -5,6 +5,8 @@ Số `#n` là pull request trên GitHub.
 
 ## [Chưa phát hành]
 
+## [0.3.2] - 2026-11-15
+
 ### Thêm
 - **Mời và quản lý thành viên (không cần quản trị vào Keycloak):** trang Thành viên tạo liên kết mời dùng một lần, có hạn (mã QR kèm theo); người được mời tự đặt tên đăng nhập và mật khẩu ở trang `/moi/<mã>`. Quản trị mời mọi vai trò; cán bộ HTX chỉ mời nghệ nhân vào HTX của mình (HTX bị ép về HTX của người mời); cán bộ OCOP và nghệ nhân không mời được; vai trò cán bộ chỉ quản trị mời (bước phê duyệt). Khóa/mở khóa tài khoản đúng phạm vi, thu hồi lời mời. Chỉ lưu băm của mã mời; nhật ký kiểm toán ẩn mã trong đường dẫn. trace-api tạo tài khoản qua client dịch vụ `dxos-members` chỉ có quyền quản lý người dùng (không dùng tài khoản admin Keycloak). Migration 0011, quyền `member.invite`/`member.lock`, `invitable` trong `config/access.json`, route công khai `/api/public/invite/*` giới hạn tần suất, `members.js`, `keycloak-admin.js`, `scripts/check-members.js`. Chưa có: gửi email/số điện thoại/Zalo, tự đăng ký công khai, quên mật khẩu.
 - **Đường chuẩn so sánh mẻ nung/nhuộm:** trang chi tiết sản phẩm (nội bộ) vẽ đường cong của mẻ chồng lên trung vị và dải thường gặp của các mẻ ĐẠT khác trên cùng thiết bị, kèm một câu nêu đoạn lệch; cần ít nhất 3 mẻ đạt; trang QR cho người mua không có (`kiln.js` referenceCurve/compareToReference, `CurveCompare.tsx`, `scripts/check-reference-curve.js`).
