@@ -17,11 +17,15 @@ export function getKeycloak(): Keycloak {
   return instance;
 }
 
-// Chỉ init một lần (React StrictMode gọi effect hai lần ở môi trường dev).
-export function initKeycloak(): Promise<boolean> {
+/**
+ * Chỉ init một lần (React StrictMode gọi effect hai lần ở môi trường dev).
+ * mode "check-sso": chỉ kiểm tra đã có phiên đăng nhập chưa, KHÔNG ép đăng nhập (dùng ở trang gốc để người chưa đăng nhập được đưa tới trang giới thiệu).
+ * mode "login-required": mọi trang còn lại, chưa đăng nhập thì chuyển sang trang đăng nhập.
+ */
+export function initKeycloak(mode: "check-sso" | "login-required" = "login-required"): Promise<boolean> {
   if (!initPromise) {
     initPromise = getKeycloak().init({
-      onLoad: "login-required",
+      onLoad: mode,
       pkceMethod: "S256",
       checkLoginIframe: false,
     });

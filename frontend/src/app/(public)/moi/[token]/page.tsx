@@ -58,7 +58,7 @@ function Accept() {
           <div className="text-center">
             <h1 className="text-lg font-semibold text-stone-900">Lời mời không dùng được</h1>
             <p className="mt-2 text-sm text-stone-600">Liên kết này đã được dùng, đã hết hạn, đã bị thu hồi hoặc nhập sai. Hãy nhờ người đã mời bạn gửi lại một liên kết mới.</p>
-            <Link href="/" className="mt-5 inline-block rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+            <Link href="/vao" className="mt-5 inline-block rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
               Về trang đăng nhập
             </Link>
           </div>
@@ -71,7 +71,7 @@ function Accept() {
               Tên đăng nhập của bạn là <span className="font-mono font-semibold text-stone-900">{done}</span>. Hãy đăng nhập bằng mật khẩu vừa đặt.
               {info?.mfa ? " Lần đầu đăng nhập, hệ thống sẽ yêu cầu bạn cài ứng dụng xác thực trên điện thoại (OTP)." : ""}
             </p>
-            <Link href="/" className="mt-5 inline-block rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+            <Link href="/vao" className="mt-5 inline-block rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
               Đăng nhập
             </Link>
           </div>

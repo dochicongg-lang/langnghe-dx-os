@@ -60,7 +60,7 @@ export default function IntroPage() {
             <a href="#danh-cho-ai" className="hover:text-stone-900">Dành cho ai</a>
             <a href="#cam-ket" className="hover:text-stone-900">Cam kết</a>
           </nav>
-          <Link href="/" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+          <Link href="/vao" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
             Đăng nhập
           </Link>
         </div>
@@ -77,7 +77,7 @@ export default function IntroPage() {
               Làng Nghề Số giúp bạn ghi lại hành trình sản phẩm, chuẩn bị hồ sơ OCOP và để người mua tự kiểm chứng nguồn gốc chỉ bằng một lần quét mã QR.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/" className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-brand-800 shadow hover:bg-brand-50">
+              <Link href="/vao" className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-brand-800 shadow hover:bg-brand-50">
                 Đăng nhập để bắt đầu
               </Link>
               <a href="#tra-cuu" className="rounded-lg border border-white/50 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10">
@@ -186,7 +186,7 @@ export default function IntroPage() {
               <h2 id="cta-h" className="text-2xl font-semibold tracking-tight">Sẵn sàng bắt đầu?</h2>
               <p className="mt-1 text-sm text-stone-300">Đăng nhập bằng tài khoản được cấp. Chưa có tài khoản, hãy nhờ cán bộ hợp tác xã.</p>
             </div>
-            <Link href="/" className="rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-600">
+            <Link href="/vao" className="rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-600">
               Đăng nhập
             </Link>
           </div>

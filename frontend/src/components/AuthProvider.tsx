@@ -2,6 +2,7 @@
 // Copyright 2026 The Làng Nghề Số contributors
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { config } from "@/lib/config";
 import { getKeycloak, initKeycloak } from "@/lib/keycloak";
@@ -49,13 +50,20 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [user, setUser] = useState<UserInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
-    initKeycloak()
+    // Vào thẳng trang gốc ("/") mà chưa đăng nhập: bắt đầu từ trang giới thiệu, bấm Đăng nhập mới sang trang đăng nhập.
+    // Các đường dẫn khác (liên kết tới một hồ sơ, sản phẩm...) vẫn chuyển thẳng sang đăng nhập rồi quay lại đúng trang đó.
+    const atRoot = window.location.pathname === "/";
+    initKeycloak(atRoot ? "check-sso" : "login-required")
       .then(() => {
         const kc = getKeycloak();
         const t = kc.tokenParsed as Record<string, unknown> | undefined;
-        if (!kc.authenticated || !t) return;
+        if (!kc.authenticated || !t) {
+          if (atRoot) router.replace("/gioi-thieu");
+          return;
+        }
         // Token hết hạn: thử làm mới ngầm; phiên Keycloak đã hết (nghỉ lâu, bị đăng xuất nơi khác) thì báo người dùng đăng nhập lại
         kc.onTokenExpired = () => {
           kc.updateToken(30).catch(() => setExpired(true));
@@ -74,7 +82,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         return fetchMe(kc.token).then((me) => setUser({ ...base, coop: me?.coop ?? base.coop, permissions: me?.permissions ?? {}, pages: me?.pages ?? [] }));
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Không kết nối được dịch vụ đăng nhập"));
-  }, []);
+  }, [router]);
 
   const logout = useCallback(() => {
     getKeycloak().logout({ redirectUri: window.location.origin });
