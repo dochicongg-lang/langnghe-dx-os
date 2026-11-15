@@ -5,6 +5,9 @@ Số `#n` là pull request trên GitHub.
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Luồng vào ứng dụng bắt đầu từ trang giới thiệu:** mở trang gốc khi chưa đăng nhập thì hiện trang giới thiệu trước, bấm Đăng nhập mới sang Keycloak (qua cổng `/vao`, đăng nhập xong vào thẳng ứng dụng); người đã có phiên vào thẳng trang chủ; mở thẳng đường dẫn bên trong vẫn chuyển ngay sang đăng nhập rồi quay lại đúng trang; đăng xuất quay về trang giới thiệu.
+
 ## [0.3.2] - 2026-11-15
 
 ### Thêm

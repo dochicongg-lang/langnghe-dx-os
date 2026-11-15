@@ -131,7 +131,7 @@ npm run dev
 
 ## 7. Xem kết quả trên trình duyệt
 
-1. Mở http://localhost:3000. Trang tự chuyển sang màn hình đăng nhập của Keycloak.
+1. Mở http://localhost:3000. Người chưa đăng nhập được đưa tới **trang giới thiệu** trước; bấm **Đăng nhập** (hoặc "Đăng nhập để bắt đầu") thì chuyển sang màn hình đăng nhập của Keycloak, đăng nhập xong vào thẳng ứng dụng. Người đã có phiên đăng nhập vào thẳng trang chủ ứng dụng. Mở thẳng một đường dẫn bên trong (ví dụ một hồ sơ) khi chưa đăng nhập thì chuyển ngay sang đăng nhập rồi quay lại đúng trang đó. Đăng xuất xong quay về trang giới thiệu.
 2. Đăng nhập bằng tài khoản thử: **tester** / **tester**.
 3. Bạn quay lại giao diện Làng Nghề Số. Bấm **Phân tích** ở thanh bên trái.
 
