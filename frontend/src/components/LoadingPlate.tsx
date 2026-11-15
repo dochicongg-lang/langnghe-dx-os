@@ -9,9 +9,23 @@ const PHOTOS = ["/photos/loading-1.webp", "/photos/loading-2.webp", "/photos/loa
 
 /** Màn hình chờ: đĩa gốm xoay chậm có nhịp, nền là các ảnh làng nghề đổi nhau bằng một đường sáng quét chéo, chạy cùng nhịp với vòng xoay của đĩa (mỗi vòng đĩa đổi một ảnh). */
 export default function LoadingPlate({ label = "Đang xác thực…" }: { label?: string }) {
+  // Thứ tự ảnh được xáo mỗi lần mở (để không lần nào cũng bắt đầu bằng cùng một ảnh); chọn sau khi trang đã dựng để không lệch giữa máy chủ và trình duyệt
+  const [order, setOrder] = useState<number[] | null>(null);
   const [cur, setCur] = useState(0);
   const [scanning, setScanning] = useState(false);
   const next = (cur + 1) % PHOTOS.length;
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const o = PHOTOS.map((_, i) => i);
+      for (let i = o.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [o[i], o[j]] = [o[j], o[i]];
+      }
+      setOrder(o);
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     PHOTOS.forEach((src) => {
@@ -26,14 +40,14 @@ export default function LoadingPlate({ label = "Đang xác thực…" }: { label
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-canvas p-6">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_420px_at_85%_-10%,var(--color-brand-100),transparent_60%),radial-gradient(700px_420px_at_-10%_110%,#f5ebe0,transparent_55%)]" />
       {/* Mỗi ảnh là một lớp riêng, khóa theo số thứ tự: ảnh mới lộ ra rồi chính lớp đó trở thành ảnh nền (không đổi ảnh của một lớp đang hiện), nên không bị chớp khi quét xong */}
-      {(scanning ? [cur, next] : [cur]).map((i) => {
+      {order && (scanning ? [cur, next] : [cur]).map((i) => {
         const revealing = scanning && i === next;
         return (
           <div
             key={i}
             aria-hidden="true"
             className={`loading-photo absolute inset-0 bg-cover bg-center ${revealing ? "loading-reveal keep-motion" : ""}`}
-            style={{ backgroundImage: `url(${PHOTOS[i]})` }}
+            style={{ backgroundImage: `url(${PHOTOS[order[i]]})` }}
             onAnimationEnd={
               revealing
                 ? () => {

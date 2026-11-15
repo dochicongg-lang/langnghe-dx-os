@@ -6,6 +6,7 @@ Số `#n` là pull request trên GitHub.
 ## [Chưa phát hành]
 
 ### Thêm
+- Màn hình chờ xáo ngẫu nhiên thứ tự ảnh nền mỗi lần mở, không lần nào cũng bắt đầu bằng cùng một ảnh.
 - **Màn hình chờ bằng đĩa gốm:** thay vòng tròn xoay bằng đĩa gốm xoay mỗi 4,8 giây (chậm ở đầu và cuối), nền bốn ảnh nhuộm dịu đổi nhau bằng đường quét chéo chạy cùng nhịp vòng xoay; mỗi ảnh là một lớp riêng nên không chớp khi quét xong. Chữ trạng thái nằm trong viên thuốc trắng cho rõ.
 - **Trang đăng nhập có chiều sâu:** nền ba ảnh làng nghề hòa vào nhau theo đường chéo (mặt nạ gradient, không có đường cắt cứng) phủ gradient đất nung, logo tròn nổi lên mép trên thẻ, tiêu đề căn giữa. Ảnh chỉ giữ cục bộ (không đưa lên kho mã); thiếu ảnh thì còn nền đất nung.
 - **Trang đăng nhập cùng gốc với giao diện (cổng 3000):** Next chuyển tiếp `/realms/<realm>/*` và `/resources/*` sang Keycloak, Keycloak đặt `KC_HOSTNAME` theo `FRONTEND_ORIGIN` (giao diện quản trị Keycloak vẫn ở cổng 8080, không đi qua giao diện; realm master và `/admin` không được chuyển tiếp). Issuer của token đổi theo (`http://localhost:3000/realms/dxos`); đã kiểm cổng gác APISIX, MinIO (STS), trace-api và các script kiểm chứng đều chạy đúng. Muốn như cũ: `KC_HOSTNAME_URL=http://localhost:8080`. Máy đang chạy cần `docker compose up -d keycloak` rồi `docker compose restart minio apisix`.
