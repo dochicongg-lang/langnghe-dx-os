@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import OverviewPanels from "@/components/OverviewPanels";
 import ProductImage from "@/components/ProductImage";
 import StageIcon from "@/components/StageIcon";
 import { stateTone, type OcopSummary } from "@/lib/ocop";
@@ -155,7 +156,7 @@ export default function Home() {
                   <li key={app.code}>
                     <Link href={`/ocop/${encodeURIComponent(app.code)}`} className="flex items-center justify-between gap-3 py-3 hover:bg-stone-50">
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-medium text-stone-800">{app.product_name}</span>
+                        <span className="block break-words text-sm font-medium text-stone-800">{app.product_name}</span>
                         <span className="block font-mono text-xs text-stone-500">{app.code}</span>
                       </span>
                       <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ${stateTone[app.state] ?? ""}`}>{why} →</span>
@@ -170,6 +171,8 @@ export default function Home() {
               </Link>
             )}
           </section>
+
+          {user.pages.includes("overview") && <OverviewPanels />}
 
           {canCreate && !isAdmin && (
           <section aria-label="Cách làm hồ sơ OCOP">
@@ -243,7 +246,7 @@ export default function Home() {
                   <Link href={`/trace/${encodeURIComponent(p.code)}`} className="group block overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition hover:border-brand-300 hover:shadow">
                     <ProductImage category={p.category} seed={p.code} className="h-28 w-full" />
                     <div className="p-3">
-                      <p className="truncate text-sm font-semibold text-stone-900 group-hover:text-brand-700">{p.name}</p>
+                      <p className="break-words text-sm font-semibold text-stone-900 group-hover:text-brand-700">{p.name}</p>
                       <p className="font-mono text-xs text-stone-500">{p.code}</p>
                       <p className="mt-2 flex items-center gap-1.5 text-xs text-stone-600">
                         {p.last_stage ? (

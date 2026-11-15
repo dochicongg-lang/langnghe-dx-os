@@ -5,7 +5,7 @@ import type { KilnInsight, KilnVerdict } from "@/lib/trace";
 export const verdictLabel: Record<KilnVerdict, string> = {
   ok: "Đạt chuẩn",
   warn: "Cần xem lại",
-  alert: "Cảnh báo",
+  alert: "Cần xem lại gấp",
   insufficient: "Chưa đủ dữ liệu",
 };
 

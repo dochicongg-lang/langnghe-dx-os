@@ -3,7 +3,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import CodeLookup from "@/components/CodeLookup";
+import IntroNav from "@/components/IntroNav";
 import Photo from "@/components/Photo";
+import Reveal from "@/components/Reveal";
 import StageIcon from "@/components/StageIcon";
 import Logo from "@/components/Logo";
 
@@ -49,17 +51,11 @@ export default function IntroPage() {
   return (
     <div className="min-h-screen bg-canvas text-stone-800">
       <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
           <Link href="/gioi-thieu" className="flex items-center gap-3">
             <Logo className="h-11 w-auto" />
           </Link>
-          <nav aria-label="Các mục trang giới thiệu" className="hidden items-center gap-6 text-sm text-stone-600 md:flex">
-            <a href="#gia-tri" className="hover:text-stone-900">Giá trị</a>
-            <a href="#cach-hoat-dong" className="hover:text-stone-900">Cách hoạt động</a>
-            <a href="#nghe" className="hover:text-stone-900">Các nghề</a>
-            <a href="#danh-cho-ai" className="hover:text-stone-900">Dành cho ai</a>
-            <a href="#cam-ket" className="hover:text-stone-900">Cam kết</a>
-          </nav>
+          <IntroNav />
           <Link href="/vao" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
             Đăng nhập
           </Link>
@@ -98,6 +94,7 @@ export default function IntroPage() {
         </section>
 
         <section id="gia-tri" aria-labelledby="gt-h" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-14">
+<Reveal>
           <h2 id="gt-h" className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">Ba việc hệ thống làm giúp bạn</h2>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
             {values.map((v) => (
@@ -110,9 +107,11 @@ export default function IntroPage() {
               </article>
             ))}
           </div>
-        </section>
+        </Reveal>
+</section>
 
         <section id="cach-hoat-dong" aria-labelledby="ch-h" className="scroll-mt-16 bg-white py-14">
+<Reveal>
           <div className="mx-auto max-w-6xl px-4">
             <h2 id="ch-h" className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">Cách hoạt động, từ xưởng đến người mua</h2>
             <ol className="mt-8 grid gap-5 md:grid-cols-4">
@@ -135,9 +134,11 @@ export default function IntroPage() {
               ))}
             </ol>
           </div>
-        </section>
+        </Reveal>
+</section>
 
         <section id="nghe" aria-labelledby="ng-h" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-14">
+<Reveal>
           <h2 id="ng-h" className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">Cho nhiều làng nghề trên một nền tảng</h2>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-stone-600">Mỗi nghề có chuỗi công đoạn riêng, còn tài khoản, hồ sơ OCOP, mã QR và nhật ký dùng chung. Mỗi hợp tác xã chỉ thấy dữ liệu của mình.</p>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -149,9 +150,11 @@ export default function IntroPage() {
               </article>
             ))}
           </div>
-        </section>
+        </Reveal>
+</section>
 
         <section id="danh-cho-ai" aria-labelledby="dc-h" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-14">
+<Reveal>
           <h2 id="dc-h" className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">Dành cho ai</h2>
           <dl className="mt-8 grid gap-4 sm:grid-cols-2">
             {audiences.map((a) => (
@@ -161,9 +164,11 @@ export default function IntroPage() {
               </div>
             ))}
           </dl>
-        </section>
+        </Reveal>
+</section>
 
         <section id="cam-ket" aria-labelledby="ck-h" className="scroll-mt-16 bg-brand-50 py-14">
+<Reveal>
           <div className="mx-auto grid max-w-6xl gap-8 px-4 md:grid-cols-[1fr_1.2fr] md:items-center">
             <div>
               <h2 id="ck-h" className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">Cam kết minh bạch</h2>
@@ -178,7 +183,8 @@ export default function IntroPage() {
               ))}
             </ul>
           </div>
-        </section>
+        </Reveal>
+</section>
 
         <section aria-labelledby="cta-h" className="bg-stone-900 py-14 text-white">
           <div className="mx-auto flex max-w-6xl flex-col items-start gap-5 px-4 md:flex-row md:items-center md:justify-between">

@@ -4,29 +4,33 @@
 // "main" là việc hằng ngày; "more" là phần quản lý/nền tảng (H-P-D-I) chỉ hiện với vai trò được phép.
 export type IconName = "gauge" | "home" | "box" | "file" | "user" | "flow" | "database" | "chart" | "help" | "layers";
 
+/** Quyền hiệu lực của người dùng ({ hành động: phạm vi }), để chú thích đổi theo việc người đó làm. */
+export type NavUser = { permissions: Record<string, string> };
+
 export interface NavItem {
   href: string;
   icon: IconName;
   title: string;
-  desc: string;
+  /** Chú thích ngắn dưới tên mục (dưới 6 từ); có thể đổi theo người dùng; bỏ trống thì không hiện. */
+  desc?: string | ((user: NavUser) => string);
 }
 
-export const homeNav: NavItem = { href: "/", icon: "home", title: "Trang chủ", desc: "Việc của bạn" };
+export const homeNav: NavItem = { href: "/", icon: "home", title: "Trang chủ" };
 
 export const businessNav: NavItem[] = [
-  { href: "/trace", icon: "box", title: "Sản phẩm", desc: "Truy xuất nguồn gốc" },
-  { href: "/ocop", icon: "file", title: "Hồ sơ OCOP", desc: "Lập, duyệt, xem kết quả" },
+  { href: "/trace", icon: "box", title: "Sản phẩm", desc: "Thông tin và nguồn gốc" },
+  { href: "/ocop", icon: "file", title: "Hồ sơ OCOP", // Cán bộ (có quyền duyệt) thấy việc duyệt; nghệ nhân thấy việc lập và theo dõi hồ sơ của mình
+    desc: (u) => (u.permissions["application.review"] ? "Tiếp nhận và duyệt hồ sơ" : "Tạo và theo dõi hồ sơ") },
 ];
 
-export const helpNav: NavItem = { href: "/help", icon: "help", title: "Trợ giúp", desc: "Hướng dẫn và liên hệ" };
+export const helpNav: NavItem = { href: "/help", icon: "help", title: "Trợ giúp", desc: "Hướng dẫn và hỗ trợ" };
 
 export const platformNav: NavItem[] = [
-  { href: "/nen-tang", icon: "layers", title: "Cấu trúc nền tảng", desc: "Gốm và lụa trên một nền tảng" },
-  { href: "/tong-quan", icon: "gauge", title: "Tổng quan", desc: "Hồ sơ chờ lâu, chất lượng mẻ" },
-  { href: "/thanh-vien", icon: "user", title: "Thành viên", desc: "Mời và quản lý tài khoản" },
-  { href: "/process", icon: "flow", title: "Việc đang xử lý", desc: "Các bước của hồ sơ" },
-  { href: "/data", icon: "database", title: "Dữ liệu", desc: "Lưu trữ và nhật ký" },
-  { href: "/intelligence", icon: "chart", title: "Phân tích", desc: "Mẻ nung, mẻ nhuộm và trợ lý hỏi đáp" },
+  { href: "/nen-tang", icon: "layers", title: "Cấu trúc nền tảng", desc: "Các nghề trên một nền tảng" },
+  { href: "/thanh-vien", icon: "user", title: "Thành viên", desc: "Quản lý tài khoản" },
+  { href: "/process", icon: "flow", title: "Việc đang xử lý", desc: "Tiến độ xử lý hồ sơ" },
+  { href: "/data", icon: "database", title: "Dữ liệu", desc: "Lịch sử và lưu trữ" },
+  { href: "/intelligence", icon: "chart", title: "Phân tích", desc: "Phân tích mẻ và trợ lý" },
 ];
 
 const PATHS: Record<IconName, string> = {

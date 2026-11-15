@@ -15,3 +15,19 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
 })();
+// Nền ba ảnh làng nghề hòa vào nhau theo đường chéo (mặt nạ gradient, không có đường cắt cứng). Thiếu ảnh thì chỉ còn gradient của trang.
+(function () {
+  function bg() {
+    if (document.querySelector(".dx-bg")) return;
+    var wrap = document.createElement("div");
+    wrap.className = "dx-bg";
+    wrap.setAttribute("aria-hidden", "true");
+    for (var i = 1; i <= 3; i++) {
+      var l = document.createElement("div");
+      l.className = "dx-bg__layer dx-bg__layer--" + i;
+      wrap.appendChild(l);
+    }
+    document.body.insertBefore(wrap, document.body.firstChild);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bg); else bg();
+})();

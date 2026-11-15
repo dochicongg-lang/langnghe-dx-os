@@ -396,7 +396,7 @@ Lưu ý: ClamAV cần khoảng 1–2 GB RAM và vài phút để nạp cơ sở 
 
 ## 15. Neo nhật ký kiểm toán
 
-Chuỗi băm của nhật ký một mình không phát hiện được việc cắt bớt các dòng cuối hay tính lại cả chuỗi. Vì vậy `trace-api` ghi định kỳ (mặc định mỗi 60 phút, `ANCHOR_INTERVAL_MINUTES`; 0 để tắt) một bản neo gồm số thứ tự và băm của dòng cuối vào bucket `dxos-audit` (có Object Lock, tài khoản `trace-anchor` không xóa được). Nút "Kiểm tra toàn vẹn nhật ký" ở trang Dữ liệu đối chiếu cả các bản neo. Quản trị có thể neo ngay bằng `POST /api/trace/audit/anchor`. Kiểm chứng thật, gồm cả hai kiểu tấn công và việc khôi phục sau đó: `node scripts/check-audit-anchor.js`.
+Chuỗi băm của nhật ký một mình không phát hiện được việc cắt bớt các dòng cuối hay tính lại cả chuỗi. Vì vậy `trace-api` ghi định kỳ (mặc định mỗi 60 phút, `ANCHOR_INTERVAL_MINUTES`; 0 để tắt) một bản neo gồm số thứ tự và băm của dòng cuối vào bucket `dxos-audit` (có Object Lock, tài khoản `trace-anchor` không xóa được). Giao diện không còn thẻ nhật ký; xem và kiểm tra bằng API (quyền quản trị): `GET /api/trace/audit` (lọc theo người dùng, phương thức, kết quả, đường dẫn) và `GET /api/trace/audit/verify` (đối chiếu chuỗi băm và cả các bản neo), hoặc đọc trực tiếp bảng `audit_log` trong PostgreSQL. Quản trị có thể neo ngay bằng `POST /api/trace/audit/anchor`. Kiểm chứng thật, gồm cả hai kiểu tấn công và việc khôi phục sau đó: `node scripts/check-audit-anchor.js`.
 
 ## 16. Quyền của trace-api đối với Flowable
 

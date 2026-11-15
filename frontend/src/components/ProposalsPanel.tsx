@@ -73,7 +73,6 @@ export default function ProposalsPanel() {
   if (!allowed) return null;
   return (
     <Card title="Đề xuất của hệ thống chờ bạn duyệt">
-      <p className="text-sm text-stone-600">Khi phân tích mẻ nung hoặc mẻ nhuộm cho kết luận Cần xem lại hoặc Cảnh báo, hệ thống đề xuất một việc cần làm kèm lý do và căn cứ. Hệ thống không tự làm: chỉ khi bạn duyệt thì thông báo mới được gửi đi.</p>
       {error && (
         <p className="mt-3 text-sm text-red-600" role="alert">
           {error}

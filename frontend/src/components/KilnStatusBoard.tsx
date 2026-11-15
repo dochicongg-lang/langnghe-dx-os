@@ -295,7 +295,6 @@ export default function KilnStatusBoard({ series, kind = "kiln" }: { series: Ser
           <span>Vạch nét đứt dọc: chuyển giai đoạn</span>
         </p>
       </div>
-      <p className="mt-3 text-xs text-stone-500">{k.labels.note}</p>
     </section>
   );
 }

@@ -88,7 +88,7 @@ export default function PlatformPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageTitle title="Cấu trúc nền tảng" desc="Gốm và lụa dùng chung một nền tảng bốn tầng. Mỗi ngành chỉ khác ở chuỗi công đoạn và phân tích riêng." />
+      <PageTitle title="Cấu trúc nền tảng" />
 
       <ol className="space-y-5">
         {tiers.map((t) => (

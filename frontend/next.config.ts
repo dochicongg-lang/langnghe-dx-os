@@ -15,7 +15,14 @@ const nextConfig: NextConfig = {
   // PUBLIC_API_PROXY_TARGET: địa chỉ cổng gác nhìn từ máy chủ Next (mặc định http://localhost:9080).
   async rewrites() {
     const target = process.env.PUBLIC_API_PROXY_TARGET ?? `http://localhost:${process.env.APISIX_GATEWAY_PORT ?? 9080}`;
+    // Trang đăng nhập Keycloak đi qua cùng gốc với giao diện (người dùng chỉ thấy một địa chỉ, cổng 3000). Chỉ chuyển tiếp realm của hệ thống
+    // và tài nguyên giao diện đăng nhập; trang quản trị Keycloak (/admin) và realm master KHÔNG được mở qua đường này.
+    // KEYCLOAK_PROXY_TARGET: địa chỉ Keycloak nhìn từ máy chủ Next (mặc định http://localhost:8080).
+    const kc = process.env.KEYCLOAK_PROXY_TARGET ?? `http://localhost:${process.env.KEYCLOAK_PORT ?? 8080}`;
+    const realm = process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? process.env.KEYCLOAK_REALM ?? "dxos";
     return [
+      { source: `/realms/${realm}/:path*`, destination: `${kc}/realms/${realm}/:path*` },
+      { source: "/resources/:path*", destination: `${kc}/resources/:path*` },
       { source: "/api/public/trace/:code", destination: `${target}/api/public/trace/:code` },
       // trang nhận lời mời (/moi/<mã>) cũng gọi API cùng nguồn gốc
       { source: "/api/public/invite/:path*", destination: `${target}/api/public/invite/:path*` },

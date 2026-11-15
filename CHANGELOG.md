@@ -5,6 +5,23 @@ Số `#n` là pull request trên GitHub.
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Màn hình chờ bằng đĩa gốm:** thay vòng tròn xoay bằng đĩa gốm xoay mỗi 4,8 giây (chậm ở đầu và cuối), nền bốn ảnh nhuộm dịu đổi nhau bằng đường quét chéo chạy cùng nhịp vòng xoay; mỗi ảnh là một lớp riêng nên không chớp khi quét xong. Chữ trạng thái nằm trong viên thuốc trắng cho rõ.
+- **Trang đăng nhập có chiều sâu:** nền ba ảnh làng nghề hòa vào nhau theo đường chéo (mặt nạ gradient, không có đường cắt cứng) phủ gradient đất nung, logo tròn nổi lên mép trên thẻ, tiêu đề căn giữa. Ảnh chỉ giữ cục bộ (không đưa lên kho mã); thiếu ảnh thì còn nền đất nung.
+- **Trang đăng nhập cùng gốc với giao diện (cổng 3000):** Next chuyển tiếp `/realms/<realm>/*` và `/resources/*` sang Keycloak, Keycloak đặt `KC_HOSTNAME` theo `FRONTEND_ORIGIN` (giao diện quản trị Keycloak vẫn ở cổng 8080, không đi qua giao diện; realm master và `/admin` không được chuyển tiếp). Issuer của token đổi theo (`http://localhost:3000/realms/dxos`); đã kiểm cổng gác APISIX, MinIO (STS), trace-api và các script kiểm chứng đều chạy đúng. Muốn như cũ: `KC_HOSTNAME_URL=http://localhost:8080`. Máy đang chạy cần `docker compose up -d keycloak` rồi `docker compose restart minio apisix`.
+- Menu trang giới thiệu: một thanh gạch chân trượt mượt theo chuột và theo phần đang xem, bấm thì lướt mượt có đà (tự viết, chạy cả khi hệ điều hành bật giảm chuyển động); mỗi phần trượt-hiện khi cuộn tới (tôn trọng giảm chuyển động).
+- Phân tích: bấm thẻ số (Tất cả, Cần xem lại, Đạt chuẩn, Chưa đủ dữ liệu) để lọc danh sách mẻ.
+- Chú thích menu ngắn gọn hơn; chú thích mục Hồ sơ OCOP đổi theo người dùng (cán bộ: tiếp nhận và duyệt; nghệ nhân: tạo và theo dõi).
+
+### Sửa
+- Bỏ dòng "Quy định áp dụng" ở đầu trang Hồ sơ OCOP.
+- Bỏ chú thích mô tả dưới tiêu đề trang và các dòng giải thích nhỏ cuối khối (không cần thiết). Bỏ thẻ "Nhật ký kiểm toán" khỏi trang Dữ liệu: nhật ký vẫn được ghi, có chuỗi băm và bản neo, xem và kiểm tra bằng API `GET /api/trace/audit` và `/audit/verify` hoặc bảng `audit_log`.
+- **Tổng quan gộp vào Trang chủ** (phần "Tình hình chung" cho quản trị, cán bộ OCOP, cán bộ HTX); `/tong-quan` chuyển về Trang chủ; bỏ mục menu riêng.
+- "Cảnh báo" gộp vào "Cần xem lại" (mẻ vượt ngưỡng nguy hiểm hiện "Cần xem lại gấp", màu đỏ); dữ liệu bên trong không đổi.
+- Bấm Đăng nhập ở trang giới thiệu bị đứng ở "Đang xác thực…" sau khi trang gốc đã kiểm tra phiên.
+- Thanh bên không hiện thanh cuộn; bỏ dòng chú thích trùng ở đầu trang; chữ không còn bị cắt bằng dấu "…" mà xuống dòng; chân trang tách khối, "Trợ giúp và liên hệ" không bị bẻ chữ.
+- Trang đăng nhập: ô mật khẩu và nút hiện/ẩn nối liền trong một khung bo tròn thống nhất (trước: ô bo tròn, nút vuông).
+
 ## [0.3.3] - 2026-11-16
 
 ### Sửa

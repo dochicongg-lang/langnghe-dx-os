@@ -96,9 +96,9 @@ export default function IntelligencePage() {
 
   return (
     <>
-      <div className="mb-6 flex items-start justify-between gap-6">
-        <PageTitle flush title="Phân tích và trợ lý" desc="Nhận định về các mẻ nung, mẻ nhuộm và số liệu từ cảm biến, cập nhật liên tục." />
-        <Photo src="/illustrations/kiln.svg" className="hidden h-24 w-44 shrink-0 rounded-xl object-cover md:block" />
+      <div className="mb-6 flex items-center justify-between gap-6">
+        <PageTitle flush title="Phân tích và trợ lý" />
+        <Photo src="/illustrations/kiln.svg" className="hidden h-16 w-28 shrink-0 rounded-xl object-cover md:block" />
       </div>
 
       {series.length > 0 && (

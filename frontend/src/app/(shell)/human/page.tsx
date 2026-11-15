@@ -21,7 +21,7 @@ export default function HumanPage() {
 
   return (
     <>
-      <PageTitle title="Tài khoản của tôi" desc="Bạn là ai trong hệ thống và bạn được làm những việc gì. Đăng nhập một lần là dùng được mọi trang." />
+      <PageTitle title="Tài khoản của tôi" />
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Tài khoản của bạn">
           <dl className="divide-y divide-stone-100 text-sm">
@@ -74,7 +74,6 @@ export default function HumanPage() {
             ) : (
               <p className="text-sm text-stone-600">Bạn chưa được cấp việc nào trong hệ thống.</p>
             )}
-            <p className="mt-4 text-xs text-stone-500">Việc nào không có trong danh sách nghĩa là bạn chưa được phép làm. Cần thêm quyền, hãy nhờ người quản trị.</p>
 
             {user.permissions["audit.read"] && (
             <details className="mt-4 rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">

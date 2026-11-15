@@ -11,6 +11,8 @@ import Logo from "@/components/Logo";
 
 function NavLink({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const desc = typeof item.desc === "function" ? item.desc(user) : item.desc;
   const active = item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`);
   return (
     <Link
@@ -26,7 +28,7 @@ function NavLink({ item, onNavigate }: { item: NavItem; onNavigate: () => void }
       </svg>
       <span>
         <span className="block font-medium">{item.title}</span>
-        <span className={`block text-xs ${active ? "text-brand-100" : "text-stone-400"}`}>{item.desc}</span>
+        {desc && <span className={`block text-xs ${active ? "text-brand-100" : "text-stone-400"}`}>{desc}</span>}
       </span>
     </Link>
   );
@@ -54,7 +56,7 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
             <span className="block text-xs text-stone-400">Cổng dịch vụ làng nghề</span>
           </span>
         </Link>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-4" aria-label="Điều hướng chính">
+        <nav className="no-scrollbar flex-1 space-y-1 overflow-y-auto p-4" aria-label="Điều hướng chính">
           <NavLink item={homeNav} onNavigate={onClose} />
           {business.map((i) => (
             <NavLink key={i.href} item={i} onNavigate={onClose} />

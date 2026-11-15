@@ -17,7 +17,7 @@ interface Answer {
   sources: { title: string; ref: string }[];
 }
 
-const EXAMPLES = ["Hồ sơ OCOP nhóm hàng thủ công cần giấy tờ gì?", "Bao nhiêu điểm thì được 4 sao?", "Kết quả OCOP có hiệu lực bao lâu?", "Kết luận Cảnh báo của mẻ nung nghĩa là gì?"];
+const EXAMPLES = ["Hồ sơ OCOP nhóm hàng thủ công cần giấy tờ gì?", "Bao nhiêu điểm thì được 4 sao?", "Kết quả OCOP có hiệu lực bao lâu?", "Kết luận Cần xem lại của mẻ nung nghĩa là gì?"];
 
 /** Chỉ đường khi trợ lý không biết: hỏi đúng người theo việc của họ. */
 function Referral() {
@@ -84,7 +84,6 @@ export default function AssistantPanel() {
 
   return (
     <Card title="Hỏi đáp về hồ sơ OCOP và hệ thống">
-      <p className="text-sm text-stone-600">Trợ lý tra cứu trong quy định và hướng dẫn của hệ thống rồi trích lại đoạn phù hợp nhất, luôn kèm nguồn. Trợ lý không tự suy đoán và không thay thế văn bản pháp luật hay quyết định của cơ quan có thẩm quyền.</p>
       <form
         className="mt-3 flex gap-2"
         onSubmit={(e) => {

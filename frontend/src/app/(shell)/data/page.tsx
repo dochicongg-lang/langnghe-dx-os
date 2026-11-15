@@ -6,7 +6,6 @@ import { useCallback, useEffect, useState } from "react";
 import Card, { PageTitle } from "@/components/Card";
 import Pager, { usePaged } from "@/components/Pager";
 import { useAuth } from "@/components/AuthProvider";
-import AuditLog from "@/components/AuditLog";
 import LakePanel from "@/components/LakePanel";
 import { fmtDate } from "@/lib/trace";
 
@@ -42,7 +41,6 @@ function Tier({ label, tone, title, children }: { label: string; tone: string; t
 export default function DataPage() {
   const { user, apiFetch } = useAuth();
   const canManage = Boolean(user.permissions["archive.manage"]);
-  const canAudit = Boolean(user.permissions["audit.read"]);
   const [overview, setOverview] = useState<ArchiveOverview | null>(null);
   const runsPaged = usePaged(overview?.runs ?? [], 5);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +100,7 @@ export default function DataPage() {
 
   return (
     <>
-      <PageTitle title="Dữ liệu và lưu trữ" desc="Dữ liệu được lưu ở đâu, giữ bao lâu và được bảo vệ thế nào." />
+      <PageTitle title="Dữ liệu và lưu trữ" />
 
       <section aria-labelledby="tiers">
         <h2 id="tiers" className="mb-3 text-base font-semibold text-stone-800">
@@ -171,7 +169,7 @@ export default function DataPage() {
                               {fmtDate(r.created_at)} · {r.triggered_by}
                             </td>
                             <td className="py-2 pr-3">{r.row_count}</td>
-                            <td className="max-w-xs truncate py-2 pr-3 font-mono text-xs text-stone-600" title={r.object_key}>
+                            <td className="max-w-xs break-all py-2 pr-3 font-mono text-xs text-stone-600" title={r.object_key}>
                               {r.object_key}
                             </td>
                             <td className="py-2 pr-3 font-mono text-xs text-stone-500">{r.sha256.slice(0, 10)}…</td>
@@ -203,11 +201,6 @@ export default function DataPage() {
       {canManage && (
         <div className="mt-6">
           <LakePanel />
-        </div>
-      )}
-      {canAudit && (
-        <div className="mt-6">
-          <AuditLog />
         </div>
       )}
     </>

@@ -10,11 +10,11 @@ export default function Card({ title, children }: { title?: string; children: Re
 }
 
 /** Tiêu đề trang. `flush`: bỏ khoảng cách dưới khi đặt trong PageHeader (PageHeader tự lo khoảng cách). */
-export function PageTitle({ title, desc, flush = false }: { title: string; desc: string; flush?: boolean }) {
+export function PageTitle({ title, desc, flush = false }: { title: string; desc?: string; flush?: boolean }) {
   return (
     <div className={flush ? "min-w-0 flex-1 basis-72" : "mb-6"}>
       <h1 className="text-2xl font-bold text-stone-900">{title}</h1>
-      <p className="mt-1 text-sm text-stone-500">{desc}</p>
+      {desc && <p className="mt-1 text-sm text-stone-500">{desc}</p>}
     </div>
   );
 }

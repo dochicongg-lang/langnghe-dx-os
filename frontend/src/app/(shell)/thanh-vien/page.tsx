@@ -107,7 +107,7 @@ export default function MembersPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageTitle title="Thành viên" desc={data?.scope === "all" ? "Mời người dùng mới và quản lý tài khoản của tất cả hợp tác xã." : "Mời nghệ nhân vào hợp tác xã của bạn và quản lý tài khoản của họ."} />
+      <PageTitle title="Thành viên" />
       {error && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       {!data && !error && <p className="text-sm text-stone-500">Đang tải…</p>}
       {data && (
@@ -253,7 +253,6 @@ export default function MembersPage() {
                 <Pager paged={people} noun="thành viên" />
               </>
             )}
-            <p className="mt-3 text-xs text-stone-500">Khóa là tạm dừng, không xóa: hồ sơ và nhật ký cũ vẫn còn đúng người. Tài khoản cán bộ HTX bắt buộc cài ứng dụng xác thực (OTP) ở lần đăng nhập đầu.</p>
           </Card>
         </div>
       )}

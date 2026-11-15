@@ -91,10 +91,10 @@ export default function TracePage() {
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-4">
-        <PageTitle flush title="Sản phẩm và truy xuất nguồn gốc" desc="Mỗi sản phẩm có một hành trình riêng theo ngành, từ nguyên liệu đến tay người mua." />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <PageTitle flush title="Sản phẩm và truy xuất nguồn gốc" />
         {canWrite && (
-          <button onClick={() => setShowForm((v) => !v)} className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+          <button onClick={() => setShowForm((v) => !v)} className="shrink-0 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
             {showForm ? "Đóng biểu mẫu" : "+ Thêm sản phẩm"}
           </button>
         )}
@@ -170,9 +170,9 @@ export default function TracePage() {
                   <Link href={`/trace/${encodeURIComponent(p.code)}`} className="group block overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm transition hover:border-brand-300 hover:shadow">
                     <ProductImage category={p.category} seed={p.code} className="h-36 w-full" />
                     <div className="p-4">
-                      <p className="truncate text-base font-semibold text-stone-900 group-hover:text-brand-700">{p.name}</p>
+                      <p className="break-words text-base font-semibold text-stone-900 group-hover:text-brand-700">{p.name}</p>
                       <p className="mt-0.5 font-mono text-xs text-stone-500">{p.code}</p>
-                      <p className="mt-2 truncate text-sm text-stone-600">{[p.village, p.artisan].filter(Boolean).join(" · ") || "Chưa ghi làng nghề"}</p>
+                      <p className="mt-2 break-words text-sm text-stone-600">{[p.village, p.artisan].filter(Boolean).join(" · ") || "Chưa ghi làng nghề"}</p>
                       <div className="mt-3 flex items-center justify-between gap-2 text-xs">
                         {p.last_stage ? (
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
