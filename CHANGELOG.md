@@ -15,6 +15,7 @@ Số `#n` là pull request trên GitHub.
 - Chú thích menu ngắn gọn hơn; chú thích mục Hồ sơ OCOP đổi theo người dùng (cán bộ: tiếp nhận và duyệt; nghệ nhân: tạo và theo dõi).
 
 ### Sửa
+- Hướng dẫn chạy: thêm cách xử lý lỗi "Không tìm thấy trang này" ở trang đăng nhập (cần khởi động lại giao diện để nạp cấu hình chuyển tiếp).
 - Bỏ dòng "Quy định áp dụng" ở đầu trang Hồ sơ OCOP.
 - Bỏ chú thích mô tả dưới tiêu đề trang và các dòng giải thích nhỏ cuối khối (không cần thiết). Bỏ thẻ "Nhật ký kiểm toán" khỏi trang Dữ liệu: nhật ký vẫn được ghi, có chuỗi băm và bản neo, xem và kiểm tra bằng API `GET /api/trace/audit` và `/audit/verify` hoặc bảng `audit_log`.
 - **Tổng quan gộp vào Trang chủ** (phần "Tình hình chung" cho quản trị, cán bộ OCOP, cán bộ HTX); `/tong-quan` chuyển về Trang chủ; bỏ mục menu riêng.

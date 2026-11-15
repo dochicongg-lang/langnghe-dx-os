@@ -178,6 +178,7 @@ Trang quản trị MinIO (xem tệp bằng giao diện) **mặc định KHÔNG �
 | `[iot] ghi MinIO thất bại: STS 400 ... aud` hoặc `STS 4xx` | Realm Keycloak cũ, thiếu cấu hình mới | Xem mục "Cập nhật realm" bên dưới |
 | Simulator: `Keycloak trả về 401 khi lấy token` hoặc `thiếu KEYCLOAK_IOT_CLIENT_SECRET` | Thiếu hoặc sai `KEYCLOAK_IOT_CLIENT_ID/SECRET`, hoặc chưa tạo client thiết bị | Đảm bảo `.env` khớp `.env.example`, rồi chạy `bash scripts/setup-keycloak-roles.sh` |
 | Phân tích: "Không đọc được dữ liệu: Failed to fetch" | Route S3 chưa tạo, hoặc `s3.localhost` không phân giải được | Chạy lại bước 4; dùng Chrome/Edge (tự hiểu `*.localhost`) |
+| Bấm Đăng nhập ra trang "Không tìm thấy trang này", địa chỉ có dạng `localhost:3000/realms/dxos/...` | Máy chủ giao diện chạy từ trước nên chưa nạp (hoặc đã mất) cấu hình chuyển tiếp trang đăng nhập trong `frontend/next.config.ts`; sau khi kéo code mới hoặc đổi nhánh cũng có thể gặp | Dừng giao diện (Ctrl+C) rồi chạy lại `npm run dev`; nếu dùng bản build thì `npm run build` lại rồi `npm run start`. Kiểm tra: `curl -i http://localhost:3000/realms/dxos/.well-known/openid-configuration` phải trả 200 |
 | Cổng đã bị chiếm (port is already allocated) | Chương trình khác dùng cổng 8080/9080/9000/5432 | Tắt chương trình đó hoặc đổi cổng trong `.env` |
 | `bash: ... not found` khi chạy script | Không dùng Git Bash | Mở Git Bash rồi chạy lại |
 
