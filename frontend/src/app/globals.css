@@ -65,8 +65,84 @@ html {
     stroke-dashoffset: 0;
     animation: none;
   }
-  * {
+  /* Hiệu ứng nhỏ, không gây chóng mặt (gạch chân menu trượt vài chục điểm ảnh) được giữ lại bằng class keep-motion; mọi thứ khác tắt */
+  *:not(.keep-motion) {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Vùng cuộn được nhưng không hiện thanh cuộn (thanh bên: thanh cuộn xám trông vướng); vẫn cuộn bằng chuột, bàn phím, cảm ứng */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Đĩa gốm ở màn hình chờ: mỗi vòng 4,8 giây, đầu và cuối chậm, giữa nhanh hơn một chút (nhịp của bàn xoay); bóng đổ "thở" theo nhịp */
+@keyframes plate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes plate-breathe {
+  0%,
+  100% {
+    box-shadow: 0 10px 24px -14px rgba(68, 42, 24, 0.35);
+  }
+  50% {
+    box-shadow: 0 18px 30px -12px rgba(68, 42, 24, 0.5);
+  }
+}
+.plate-spin {
+  animation: plate-spin 4.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+.plate-shadow {
+  animation: plate-breathe 4.8s ease-in-out infinite;
+}
+
+/* Nền màn hình chờ: ảnh được nhuộm lại (bớt sặc sỡ, ngả ấm) cho dịu mắt; đường sáng quét từ trái sang phải, ảnh mới lộ ra theo sau */
+.loading-photo {
+  filter: sepia(0.4) saturate(0.7) brightness(1.08) contrast(0.88);
+}
+
+/* Đường quét chéo (nghiêng 20 độ, nghiêng từ dưới trái lên trên phải) bắt đầu ở đầu mỗi vòng xoay của đĩa (4,8 giây), nghỉ 1,2 giây rồi quét 2,4 giây nên lúc quét nhanh nhất cũng là lúc đĩa xoay nhanh nhất; mép ảnh mới trùng đúng với đường quét */
+@keyframes loading-reveal {
+  from {
+    clip-path: polygon(0 0, 0 0, calc(-0.364 * 100vh) 100%, 0 100%);
+  }
+  to {
+    clip-path: polygon(0 0, calc(100% + 0.364 * 100vh) 0, 100% 100%, 0 100%);
+  }
+}
+@keyframes loading-scan {
+  from {
+    left: calc(-0.182 * 100vh);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  to {
+    left: calc(100% + 0.182 * 100vh);
+    opacity: 0;
+  }
+}
+.loading-reveal {
+  animation: loading-reveal 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) 1.2s both;
+}
+.loading-scan {
+  position: absolute;
+  top: 50%;
+  width: 5rem;
+  height: 300vmax;
+  transform: translate(-50%, -50%) rotate(20deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 244, 228, 0.5) 45%, rgba(255, 250, 240, 0.85) 50%, rgba(255, 244, 228, 0.5) 55%, transparent);
+  animation: loading-scan 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) 1.2s both;
+  pointer-events: none;
 }

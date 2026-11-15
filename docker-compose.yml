@@ -101,7 +101,12 @@ services:
     command: start-dev --import-realm
     environment:
       # Issuer của token luôn là KC_HOSTNAME dù APISIX gọi qua http://keycloak:8080 (backchannel động)
-      KC_HOSTNAME: ${KC_HOSTNAME_URL:-http://localhost:${KEYCLOAK_PORT}} # triển khai thật: đặt KC_HOSTNAME_URL=https://<tên-miền-đăng-nhập> trong .env
+      # Mặc định trang đăng nhập nằm CÙNG gốc với giao diện (cổng 3000): Next chuyển tiếp /realms/<realm>/* và /resources/* sang Keycloak (xem frontend/next.config.ts),
+      # nên người dùng không thấy địa chỉ đổi sang cổng 8080. Muốn như cũ (Keycloak ở cổng riêng): đặt KC_HOSTNAME_URL=http://localhost:8080 trong .env.
+      # Triển khai thật: đặt KC_HOSTNAME_URL=https://<tên-miền-đăng-nhập> (hoặc cùng tên miền với giao diện nếu proxy chung).
+      KC_HOSTNAME: ${KC_HOSTNAME_URL:-${FRONTEND_ORIGIN:-http://localhost:3000}}
+      # Giao diện quản trị Keycloak vẫn mở trực tiếp ở cổng riêng (không đi qua giao diện)
+      KC_HOSTNAME_ADMIN: ${KC_HOSTNAME_ADMIN_URL:-http://localhost:${KEYCLOAK_PORT}}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}

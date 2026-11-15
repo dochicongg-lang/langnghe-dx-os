@@ -27,13 +27,26 @@ interface Overview {
   runs: Run[];
 }
 
+type Filter = "all" | "attention" | "ok" | "insufficient";
+
+// "Cần xem lại" gồm cả mẻ lệch chuẩn (warn) và mẻ vượt ngưỡng nguy hiểm (alert: nhãn "gấp", màu đỏ), vì với người dùng cả hai đều là việc phải xem.
+const inFilter = (f: Filter, v: KilnVerdict) => f === "all" || (f === "attention" ? v === "warn" || v === "alert" : v === f);
+
+const TILES: [Filter, string][] = [
+  ["all", "Tất cả"],
+  ["attention", "Cần xem lại"],
+  ["ok", "Đạt chuẩn"],
+  ["insufficient", "Chưa đủ dữ liệu"],
+];
+
 const fmt = (iso: string) => new Date(iso).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 
-/** Tổng hợp phân tích thông minh các mẻ nung mà người dùng được xem: cảnh báo trước, kèm lý do. */
+/** Tổng hợp phân tích thông minh các mẻ nung và nhuộm mà người dùng được xem: bấm vào thẻ số để lọc, mẻ cần xem hiện trước kèm lý do. */
 export default function KilnInsights() {
   const { apiFetch } = useAuth();
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
 
   const load = useCallback(async () => {
     try {
@@ -54,8 +67,10 @@ export default function KilnInsights() {
 
   const order: Record<KilnVerdict, number> = { alert: 0, warn: 1, insufficient: 2, ok: 3 };
   const runs = data ? [...data.runs].sort((a, b) => order[a.insight.verdict] - order[b.insight.verdict] || Date.parse(b.at) - Date.parse(a.at)) : [];
+  const shown = runs.filter((r) => inFilter(filter, r.insight.verdict));
+  const count = (f: Filter) => runs.filter((r) => inFilter(f, r.insight.verdict)).length;
 
-  const paged = usePaged(runs, 5);
+  const paged = usePaged(shown, 5, filter);
 
   return (
     <Card title="Phân tích thông minh các mẻ nung và mẻ nhuộm">
@@ -67,26 +82,27 @@ export default function KilnInsights() {
       {!error && !data && <p className="text-sm text-stone-500">Đang tải…</p>}
       {data && (
         <>
-          <p className="text-sm text-stone-600">
-            Hệ thống tự đối chiếu đường cong nhiệt độ của từng mẻ (nung gốm, nhuộm lụa) với hồ sơ ngưỡng của nghề đó: đỉnh nhiệt, thời gian giữ, tốc độ nâng và hạ nhiệt, so với các mẻ khác trên cùng thiết bị, và độ tin cậy của số liệu.
-          </p>
-          <dl className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-            {(
-              [
-                ["alert", "Cảnh báo"],
-                ["warn", "Cần xem lại"],
-                ["ok", "Đạt chuẩn"],
-                ["insufficient", "Chưa đủ dữ liệu"],
-              ] as [KilnVerdict, string][]
-            ).map(([k, label]) => (
-              <div key={k} className="rounded-lg bg-stone-50 py-2">
-                <dt className="text-xs text-stone-500">{label}</dt>
-                <dd className="text-2xl font-bold text-stone-900">{data.summary[k]}</dd>
-              </div>
-            ))}
-          </dl>
+          <div role="group" aria-label="Lọc theo kết luận" className="mt-3 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+            {TILES.map(([k, label]) => {
+              const on = filter === k;
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setFilter(k)}
+                  className={`rounded-lg border py-2 transition-colors ${on ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500" : "border-transparent bg-stone-50 hover:border-stone-300 hover:bg-white"}`}
+                >
+                  <span className={`block text-xs ${on ? "font-semibold text-brand-700" : "text-stone-500"}`}>{label}</span>
+                  <span className="block text-2xl font-bold text-stone-900">{count(k)}</span>
+                </button>
+              );
+            })}
+          </div>
           {runs.length === 0 ? (
             <p className="mt-4 text-sm text-stone-500">Chưa có công đoạn nung hoặc nhuộm nào gắn dữ liệu cảm biến trong phạm vi bạn được xem.</p>
+          ) : shown.length === 0 ? (
+            <p className="mt-4 text-sm text-stone-500">Không có mẻ nào thuộc nhóm này.</p>
           ) : (
             <ul className="mt-4 divide-y divide-stone-100">
               {paged.items.map((r) => {

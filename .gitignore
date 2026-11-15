@@ -11,3 +11,7 @@ frontend/public/photos/*.jpg
 
 # Gói phát hành tạo bởi scripts/make-release-archive.sh
 dist/
+
+# Ảnh nền đăng nhập (ảnh có bản quyền của tác giả, chỉ giữ cục bộ, không đưa lên kho mã)
+keycloak/themes/dxos/login/resources/img/bg-*.webp
+frontend/public/photos/*.webp

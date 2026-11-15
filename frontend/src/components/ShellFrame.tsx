@@ -39,16 +39,21 @@ export default function ShellFrame({ children }: { children: React.ReactNode }) 
           )}
         </main>
         <footer className="border-t border-stone-200 px-4 pb-24 pt-4 text-xs sm:pb-4 sm:pr-32 text-stone-500 md:px-6 md:pr-36">
-          <p>
-            Làng Nghề Số · Hỗ trợ lập hồ sơ OCOP và truy xuất nguồn gốc làng nghề. Kết quả OCOP chính thức do cơ quan có thẩm quyền quyết định.{" "}
-            <Link href="/help" className="font-medium text-brand-700 hover:underline">
-              Trợ giúp và liên hệ
-            </Link>
-            {" · "}
-            <Link href="/gioi-thieu" className="font-medium text-brand-700 hover:underline">
-              Giới thiệu
-            </Link>
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+            <div className="max-w-2xl space-y-0.5">
+              <p className="font-medium text-stone-600">Làng Nghề Số</p>
+              <p>Hỗ trợ lập hồ sơ OCOP và truy xuất nguồn gốc làng nghề.</p>
+              <p>Kết quả OCOP chính thức do cơ quan có thẩm quyền quyết định.</p>
+            </div>
+            <nav aria-label="Liên kết chân trang" className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <Link href="/help" className="whitespace-nowrap font-medium text-brand-700 hover:underline">
+                Trợ giúp và liên hệ
+              </Link>
+              <Link href="/gioi-thieu" className="whitespace-nowrap font-medium text-brand-700 hover:underline">
+                Giới thiệu
+              </Link>
+            </nav>
+          </div>
         </footer>
       </div>
       <HelpWidget />

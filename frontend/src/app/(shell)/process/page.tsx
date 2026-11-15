@@ -38,7 +38,7 @@ export default function ProcessPage() {
 
   return (
     <>
-      <PageTitle title="Việc đang xử lý" desc="Mỗi hồ sơ OCOP đi qua bốn chặng. Xem hồ sơ đang nằm ở đâu và ai đang giữ." />
+      <PageTitle title="Việc đang xử lý" />
       {error && <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">Không tải được dữ liệu: {error}</p>}
 
       <ol className="grid gap-3 md:grid-cols-4">
@@ -72,8 +72,8 @@ export default function ProcessPage() {
                 <li key={a.code}>
                   <Link href={`/ocop/${encodeURIComponent(a.code)}`} className="flex items-center justify-between gap-3 py-3 hover:bg-stone-50">
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-stone-800">{a.product_name}</span>
-                      <span className="block truncate text-xs text-stone-500">
+                      <span className="block break-words text-sm font-medium text-stone-800">{a.product_name}</span>
+                      <span className="block break-words text-xs text-stone-500">
                         <span className="font-mono">{a.code}</span> · người nộp {a.owner}
                       </span>
                     </span>

@@ -50,7 +50,7 @@ export default function HelpPage() {
   const hasContact = contactChannels().length > 0;
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <PageTitle title="Trợ giúp" desc="Hướng dẫn nhanh, câu hỏi thường gặp và cách liên hệ khi cần." />
+      <PageTitle title="Trợ giúp" />
 
       <figure className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
         {/* eslint-disable-next-line @next/next/no-img-element */}

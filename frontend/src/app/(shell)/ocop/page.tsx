@@ -173,16 +173,17 @@ export default function OcopPage() {
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-x-4 gap-y-4">
-        <PageTitle flush title="Hồ sơ OCOP" desc="Lập hồ sơ, HTX sơ duyệt, rồi theo dõi kết quả. Kết quả chính thức do cơ quan có thẩm quyền quyết định." />
-        <Photo src="/illustrations/ocop.svg" className="order-last hidden h-24 w-44 shrink-0 rounded-xl object-cover md:block" />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1 basis-60">
+          <PageTitle flush title="Hồ sơ OCOP" />
+        </div>
         {canCreate && (
-          <button onClick={() => setShowForm((v) => !v)} className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+          <button onClick={() => setShowForm((v) => !v)} className="shrink-0 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
             {showForm ? "Đóng biểu mẫu" : "+ Lập hồ sơ mới"}
           </button>
         )}
+        <Photo src="/illustrations/ocop.svg" className="hidden h-16 w-28 shrink-0 rounded-xl object-cover md:block" />
       </div>
-      {profile && <p className="-mt-3 mb-4 text-xs text-stone-500">Quy định áp dụng: {profile.name}</p>}
 
       <div className="space-y-4">
         {showForm && (
@@ -217,8 +218,8 @@ export default function OcopPage() {
                                   Dùng lại mô tả đã nhập trên máy này:
                                   <span className="mt-1 flex flex-wrap gap-1.5">
                                     {pastDescs.filter((d) => d !== desc).slice(0, 4).map((d) => (
-                                      <button key={d} type="button" onClick={() => setDesc(d)} className="max-w-full truncate rounded-full border border-stone-300 px-2.5 py-1 text-left text-stone-700 hover:bg-stone-100" title={d}>
-                                        {d.length > 48 ? d.slice(0, 48) + "…" : d}
+                                      <button key={d} type="button" onClick={() => setDesc(d)} className="max-w-full break-words rounded-full border border-stone-300 px-2.5 py-1 text-left text-stone-700 hover:bg-stone-100" title={d}>
+                                        {d}
                                       </button>
                                     ))}
                                   </span>

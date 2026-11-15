@@ -2,7 +2,8 @@
 // Copyright 2026 The Làng Nghề Số contributors
 // Cấu hình dùng chung cho Tầng 2. Mọi lời gọi API đều đi qua API Gateway (APISIX) kèm JWT Keycloak.
 export const config = {
-  keycloakUrl: process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? "http://localhost:8080",
+  // Mặc định cùng gốc với giao diện (Next chuyển tiếp /realms/* và /resources/* sang Keycloak); đặt NEXT_PUBLIC_KEYCLOAK_URL nếu Keycloak ở địa chỉ khác.
+  keycloakUrl: process.env.NEXT_PUBLIC_KEYCLOAK_URL ?? (typeof window !== "undefined" ? window.location.origin : ""),
   realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM ?? "dxos",
   clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID ?? "dxos-web",
   apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:9080",

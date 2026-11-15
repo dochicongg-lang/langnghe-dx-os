@@ -9,7 +9,7 @@ import AssistantPanel from "@/components/AssistantPanel";
 export default function AssistantPage() {
   return (
     <div className="mx-auto max-w-3xl">
-      <PageTitle title="Hỏi trợ lý" desc="Hỏi bằng câu thường ngày, ví dụ “hồ sơ OCOP cần giấy tờ gì”. Câu trả lời luôn kèm nguồn; nếu không tìm thấy, trợ lý sẽ nói thẳng là không biết." />
+      <PageTitle title="Hỏi trợ lý" />
       <AssistantPanel />
     </div>
   );

@@ -37,7 +37,7 @@ export default function ContactList() {
               </span>
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-stone-900">{c.label}</span>
-                <span className="block truncate text-xs text-stone-500">{c.value}</span>
+                <span className="block break-words text-xs text-stone-500">{c.value}</span>
               </span>
             </a>
           </li>

@@ -63,7 +63,7 @@ function Item({ code, a, canEdit, onRemove, busy }: { code: string; a: Attachmen
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-red-50 text-[10px] font-bold text-red-700">PDF</span>
         )}
         <span className="min-w-0">
-          <span className="block max-w-[11rem] truncate font-medium text-stone-800">{a.filename}</span>
+          <span className="block max-w-[11rem] break-all font-medium text-stone-800">{a.filename}</span>
           <span className="block text-stone-500">
             {fmtSize(a.size)} · {a.uploaded_by}
           </span>

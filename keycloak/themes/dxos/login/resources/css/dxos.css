@@ -62,7 +62,10 @@ body {
   display: block;
   width: 9rem;
   height: 6.2rem;
-  background: url("../img/logo.png") center / contain no-repeat;
+  /* mâm trắng bo góc để logo đọc được trên nền ảnh */
+  background: #fff url("../img/logo.png") center / 80% no-repeat;
+  border-radius: 1rem;
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.5);
 }
 .pf-v5-c-login__header {
   margin-bottom: 0.25rem;
@@ -134,4 +137,133 @@ body {
 
 .pf-v5-c-login__main-footer {
   padding-top: 0;
+}
+
+/* Ô nhập thống nhất: mọi ô là MỘT khung bo tròn cùng kiểu. Ô có nút đi kèm (hiện/ẩn mật khẩu, đổi tài khoản) thì ô và nút nối liền
+   trong cùng một khung (không có góc tròn ở chỗ nối), viền đổi màu thương hiệu khi đang nhập. */
+.pf-v5-c-form-control::after {
+  display: none;
+}
+.pf-v5-c-form-control::before {
+  border: 1px solid #d6d3d1 !important;
+  border-radius: 0.5rem !important;
+}
+.pf-v5-c-form-control:focus-within::before {
+  border-color: var(--dx-brand-600) !important;
+  box-shadow: 0 0 0 3px rgba(192, 74, 31, 0.15);
+}
+.pf-v5-c-input-group {
+  gap: 0;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.5rem;
+  background: #fff;
+  overflow: hidden;
+}
+.pf-v5-c-input-group:focus-within {
+  border-color: var(--dx-brand-600);
+  box-shadow: 0 0 0 3px rgba(192, 74, 31, 0.15);
+}
+.pf-v5-c-input-group .pf-v5-c-form-control,
+.pf-v5-c-input-group .pf-v5-c-form-control::before,
+.pf-v5-c-input-group .pf-v5-c-form-control::after {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent;
+}
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control {
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+/* Nền ảnh: ba ảnh chồng lên nhau, mỗi lớp mờ dần theo hướng chéo nên chỗ giao nhau liền mạch; gradient đất nung phủ lên để thẻ đăng nhập nổi bật */
+.dx-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #3b2415;
+}
+.dx-bg__layer {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+}
+.dx-bg__layer--1 {
+  background-image: url("../img/bg-1.webp");
+  -webkit-mask-image: linear-gradient(105deg, #000 22%, transparent 48%);
+  mask-image: linear-gradient(105deg, #000 22%, transparent 48%);
+}
+.dx-bg__layer--2 {
+  background-image: url("../img/bg-2.webp");
+  -webkit-mask-image: linear-gradient(105deg, transparent 20%, #000 42%, #000 58%, transparent 80%);
+  mask-image: linear-gradient(105deg, transparent 20%, #000 42%, #000 58%, transparent 80%);
+}
+.dx-bg__layer--3 {
+  background-image: url("../img/bg-3.webp");
+  -webkit-mask-image: linear-gradient(105deg, transparent 52%, #000 78%);
+  mask-image: linear-gradient(105deg, transparent 52%, #000 78%);
+}
+.dx-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(120, 53, 15, 0.6), rgba(28, 25, 23, 0.55));
+}
+.pf-v5-c-login,
+.pf-v5-c-login__container {
+  position: relative;
+  z-index: 1;
+}
+@media (max-width: 767px) {
+  .dx-bg__layer--1 { -webkit-mask-image: none; mask-image: none; }
+  .dx-bg__layer--2, .dx-bg__layer--3 { display: none; }
+}
+
+/* Logo tròn đè lên mép trên của thẻ đăng nhập, tiêu đề căn giữa */
+#kc-header-wrapper::before {
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: 50%;
+  background-size: 74%;
+  border: 3px solid #fff;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.55);
+}
+.pf-v5-c-login__header {
+  position: relative;
+  z-index: 2;
+  margin-bottom: -3.25rem;
+}
+.pf-v5-c-login__main {
+  padding-top: 3.25rem;
+}
+.pf-v5-c-login__main-header {
+  text-align: center;
+  border-top: 0;
+}
+.pf-v5-c-login__main-header .pf-v5-c-title,
+#kc-page-title {
+  text-align: center;
+}
+#kc-header-wrapper {
+  height: 6.5rem;
+  padding: 0;
+}
+.pf-v5-c-login__header {
+  height: 6.5rem;
+}
+.pf-v5-c-login__main-header {
+  display: block;
+  padding: 0.5rem 3rem 0;
+}
+/* Logo liền khối với thẻ: cùng màu trắng, không viền, không bóng riêng */
+#kc-header-wrapper::before {
+  border: 0;
+  box-shadow: none;
+}
+/* Logo nổi lên trên thẻ với viền trắng và bóng */
+#kc-header-wrapper::before {
+  border: 3px solid #fff;
+  box-shadow: 0 10px 28px -8px rgba(0, 0, 0, 0.55);
 }
