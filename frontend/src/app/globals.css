@@ -22,7 +22,8 @@
   --color-brand-800: #823219;
   --color-brand-900: #6b2c18;
   --color-canvas: #faf8f5;
-  --font-sans: var(--font-be-vietnam), "Segoe UI", system-ui, sans-serif;
+  --font-sans: var(--font-source-sans), "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-playfair), Georgia, "Times New Roman", serif;
 }
 
 :root {
@@ -33,6 +34,15 @@ body {
   background: var(--color-canvas);
   color: var(--color-stone-800);
   font-family: var(--font-sans);
+}
+
+/* Tiêu đề (h1-h3): phông Playfair Display, viết hoa toàn bộ. Nút, nhãn ô nhập, chú thích menu và đoạn văn giữ phông thường để dễ đọc. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 
 /* Vòng focus rõ ràng cho bàn phím */
@@ -145,4 +155,22 @@ html {
   background: linear-gradient(90deg, transparent, rgba(255, 244, 228, 0.5) 45%, rgba(255, 250, 240, 0.85) 50%, rgba(255, 244, 228, 0.5) 55%, transparent);
   animation: loading-scan 2.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) 1.2s both;
   pointer-events: none;
+}
+
+/* Khung hình hoa tám cánh cho logo (mặt nạ SVG); nền do class bg-* quyết định */
+.flower-frame {
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%3E%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2732%27%2F%3E%3Ccircle%20cx%3D%2778%27%20cy%3D%2750%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2769.8%27%20cy%3D%2769.8%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2750%27%20cy%3D%2778%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2730.2%27%20cy%3D%2769.8%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2722%27%20cy%3D%2750%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2730.2%27%20cy%3D%2730.2%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2750%27%20cy%3D%2722%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2769.8%27%20cy%3D%2730.2%27%20r%3D%2719%27%2F%3E%3C%2Fsvg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%3E%3Ccircle%20cx%3D%2750%27%20cy%3D%2750%27%20r%3D%2732%27%2F%3E%3Ccircle%20cx%3D%2778%27%20cy%3D%2750%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2769.8%27%20cy%3D%2769.8%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2750%27%20cy%3D%2778%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2730.2%27%20cy%3D%2769.8%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2722%27%20cy%3D%2750%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2730.2%27%20cy%3D%2730.2%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2750%27%20cy%3D%2722%27%20r%3D%2719%27%2F%3E%3Ccircle%20cx%3D%2769.8%27%20cy%3D%2730.2%27%20r%3D%2719%27%2F%3E%3C%2Fsvg%3E") center / 100% 100% no-repeat;
+}
+
+/* Quy tắc ngắt dòng cho cả giao diện: đoạn văn tránh để một hai chữ lẻ ở dòng cuối (pretty); tiêu đề và câu ngắn chia đều các dòng (balance) */
+body {
+  text-wrap: pretty;
+}
+h1,
+h2,
+h3,
+[role="alert"],
+[role="status"] {
+  text-wrap: balance;
 }

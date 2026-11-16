@@ -6,6 +6,10 @@ Số `#n` là pull request trên GitHub.
 ## [Chưa phát hành]
 
 ### Thêm
+- Menu trang giới thiệu viết hoa bằng Playfair Display, đậm vừa và giãn chữ nhẹ. Trang đăng nhập: ô nhập dạng viên thuốc (cao, bo tròn hết cỡ), nút Đăng nhập chuyển màu đất nung, chữ gợi ý "Nhập tên đăng nhập" và "Nhập mật khẩu" trong ô; sửa lỗi ô mật khẩu bị lệch (khung đen của trình duyệt chồng lên khung ô) bằng một khung duy nhất cho cả nhóm ô và nút mắt, khung đỏ khi đăng nhập sai.
+- **Hai phông chữ:** tiêu đề (h1–h3) dùng Playfair Display viết hoa; menu, nội dung, nút, nhãn và bảng dùng Source Sans 3 (đủ dấu tiếng Việt, chữ nhỏ vẫn rõ). Mã, khóa và số quyết định vẫn dùng phông đơn cách. Theme đăng nhập Keycloak tự lưu cả hai phông (giấy phép SIL OFL) trong `resources/fonts`, không phụ thuộc Internet.
+- **Trang đăng nhập gọn và cân đối:** thẻ hẹp lại (khoảng 400 px) và căn giữa chính xác cả ngang lẫn dọc; biểu tượng hiện/ẩn mật khẩu đổi sang mắt nét mảnh; logo nằm trong khung hình hoa tám cánh (cả trang đăng nhập lẫn menu bên trái), bóng đổ theo đúng hình hoa.
+- Trang đăng nhập: nền ảnh hai nghệ nhân chia đôi (già bên trái, trẻ bên phải, ảnh phố làng nghề ở giữa hòa bằng mặt nạ mềm), ảnh dựng theo chiều cao màn hình để giữ độ nét. Ảnh nền đăng nhập và màn hình chờ được dựng lại từ ảnh gốc (phóng bằng Lanczos, làm nét vừa phải) cho nét hơn; màn hình chờ giữ nguyên bố cục.
 - Màn hình chờ xáo ngẫu nhiên thứ tự ảnh nền mỗi lần mở, không lần nào cũng bắt đầu bằng cùng một ảnh.
 - **Màn hình chờ bằng đĩa gốm:** thay vòng tròn xoay bằng đĩa gốm xoay mỗi 4,8 giây (chậm ở đầu và cuối), nền bốn ảnh nhuộm dịu đổi nhau bằng đường quét chéo chạy cùng nhịp vòng xoay; mỗi ảnh là một lớp riêng nên không chớp khi quét xong. Chữ trạng thái nằm trong viên thuốc trắng cho rõ.
 - **Trang đăng nhập có chiều sâu:** nền ba ảnh làng nghề hòa vào nhau theo đường chéo (mặt nạ gradient, không có đường cắt cứng) phủ gradient đất nung, logo tròn nổi lên mép trên thẻ, tiêu đề căn giữa. Ảnh chỉ giữ cục bộ (không đưa lên kho mã); thiếu ảnh thì còn nền đất nung.
@@ -15,6 +19,8 @@ Số `#n` là pull request trên GitHub.
 - Chú thích menu ngắn gọn hơn; chú thích mục Hồ sơ OCOP đổi theo người dùng (cán bộ: tiếp nhận và duyệt; nghệ nhân: tạo và theo dõi).
 
 ### Sửa
+- Thông điệp có hai câu hiện mỗi câu một dòng (thông báo đăng nhập sai với cỡ chữ nhỏ hơn một chút; mục cam kết ở trang giới thiệu). Danh sách giấy tờ khi lập hồ sơ OCOP: nút Chọn tệp cách xa dòng giấy tờ hơn.
+- Quy tắc ngắt dòng cho cả giao diện và trang đăng nhập: đoạn văn không để một hai chữ lẻ ở dòng cuối (`text-wrap: pretty`), tiêu đề và thông báo ngắn chia đều các dòng (`balance`); biểu tượng cảnh báo và mắt ở ô đăng nhập căn giữa dọc; hai ô tên đăng nhập và mật khẩu sát nhau hơn.
 - Hướng dẫn chạy: thêm cách xử lý lỗi "Không tìm thấy trang này" ở trang đăng nhập (cần khởi động lại giao diện để nạp cấu hình chuyển tiếp).
 - Bỏ dòng "Quy định áp dụng" ở đầu trang Hồ sơ OCOP.
 - Bỏ chú thích mô tả dưới tiêu đề trang và các dòng giải thích nhỏ cuối khối (không cần thiết). Bỏ thẻ "Nhật ký kiểm toán" khỏi trang Dữ liệu: nhật ký vẫn được ghi, có chuỗi băm và bản neo, xem và kiểm tra bằng API `GET /api/trace/audit` và `/audit/verify` hoặc bảng `audit_log`.

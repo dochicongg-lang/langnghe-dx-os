@@ -178,7 +178,14 @@ export default function IntroPage() {
               {promises.map((p) => (
                 <li key={p} className="flex gap-3 rounded-xl bg-white p-4 text-sm leading-relaxed text-stone-700 shadow-sm">
                   <span aria-hidden="true" className="mt-0.5 font-bold text-emerald-600">✓</span>
-                  {p}
+                  {/* mỗi câu một dòng, câu dài tự xuống dòng (không để một hai chữ lẻ ở cuối) */}
+                  <span>
+                    {p.split(/(?<=[.!?])\s+/).map((s) => (
+                      <span key={s} className="block">
+                        {s}
+                      </span>
+                    ))}
+                  </span>
                 </li>
               ))}
             </ul>

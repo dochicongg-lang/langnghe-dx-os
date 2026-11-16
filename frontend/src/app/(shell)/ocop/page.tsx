@@ -253,7 +253,7 @@ export default function OcopPage() {
                             <fieldset className="rounded-lg border border-stone-200 p-3">
                               <legend className="px-1 text-sm text-stone-600">Giấy tờ đã có</legend>
                               <p className="mb-2 text-xs text-stone-500">Tích những giấy tờ bạn đang có. Với giấy tờ đã tích, bấm «Chọn tệp» để đính kèm ngay (tệp được gắn vào mọi hồ sơ tạo trong lần này, tiện cho giấy phép dùng chung); hoặc tải sau ở trang hồ sơ.</p>
-                              <div className="space-y-1">
+                              <div className="space-y-3">
                                 {checklist.map((c) => (
                                   <div key={c.key}>
                                   <label className="flex items-start gap-2 text-sm text-stone-700">
@@ -268,13 +268,13 @@ export default function OcopPage() {
                                     </span>
                                   </label>
                                   {docs.includes(c.key) && (
-                                    <div className="mb-1 ml-6 text-xs text-stone-500">
-                                      <label className="cursor-pointer rounded-md border border-stone-300 px-2 py-1 text-stone-700 hover:bg-stone-100">
+                                    <div className="mb-1 ml-6 mt-2 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                      <label className="cursor-pointer rounded-md border border-stone-300 px-3 py-1.5 text-stone-700 hover:bg-stone-100">
                                         Chọn tệp
                                         <input type="file" multiple accept={ALLOWED.join(",")} className="sr-only" onChange={(e) => { pickFiles(c.key, e.target.files); e.target.value = ""; }} />
                                       </label>
                                       {(files[c.key] ?? []).map((f, i) => (
-                                        <span key={f.name + i} className="ml-2 inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5">
+                                        <span key={f.name + i} className="inline-flex items-center gap-1 rounded-full bg-stone-100 px-2 py-0.5">
                                           {f.name}
                                           <button type="button" aria-label={`Bỏ ${f.name}`} onClick={() => setFiles((m) => ({ ...m, [c.key]: (m[c.key] ?? []).filter((_, j) => j !== i) }))}>✕</button>
                                         </span>

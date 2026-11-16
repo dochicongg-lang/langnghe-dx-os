@@ -126,7 +126,7 @@ export default function IntroNav() {
             onMouseEnter={() => { state.current.hover = id; setHover(id); refresh(); }}
             onFocus={() => { state.current.hover = id; setHover(id); refresh(); }}
             onBlur={() => { state.current.hover = ""; setHover(""); refresh(); }}
-            className={`keep-motion flex items-center px-[14px] text-sm font-medium transition-colors duration-300 ${on ? "text-brand-700" : pointed ? "text-stone-900" : "text-stone-600"}`}
+            className={`keep-motion flex items-center px-[15px] font-display text-[13px] font-semibold uppercase tracking-[0.08em] transition-colors duration-300 ${on ? "text-brand-700" : pointed ? "text-stone-900" : "text-stone-600"}`}
           >
             {label}
           </a>

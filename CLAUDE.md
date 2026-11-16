@@ -20,6 +20,7 @@ Mục tiêu là xây dựng một mô hình thực hành số dựa trên Khung 
 - Luôn ưu tiên các giải pháp mã nguồn mở.
 - Khi tạo file `docker-compose.yml`, hãy đặt tất cả các service vào một mạng bridge chung và sử dụng biến môi trường từ file `.env`.
 - Mọi API được bảo vệ phải đi qua API Gateway (APISIX) và xác thực JWT token từ Keycloak.
+- **Quy tắc giao diện (web và theme đăng nhập):** không để một hai chữ lẻ rơi xuống dòng cuối (đã đặt `text-wrap: pretty` cho nội dung và `balance` cho tiêu đề, câu ngắn, thông báo ở `frontend/src/app/globals.css` và `keycloak/themes/dxos/login/resources/css/dxos.css`; mục mới phải kế thừa, không tắt); thông điệp có hai câu thì mỗi câu một dòng (thông báo ở trang đăng nhập do `dxos.js` tách; mục cam kết ở trang giới thiệu tách bằng mã); biểu tượng đi kèm ô hoặc nút phải căn giữa dọc bằng flex (`align-items: center`), không dùng độ lệch cố định.
 
 ## Lệnh thường dùng
 - Khởi động hệ thống: `docker compose up -d`
