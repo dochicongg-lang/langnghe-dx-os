@@ -5,6 +5,8 @@ Số `#n` là pull request trên GitHub.
 
 ## [Chưa phát hành]
 
+## [0.3.4] - 2026-11-16
+
 ### Thêm
 - Menu trang giới thiệu viết hoa bằng Playfair Display, đậm vừa và giãn chữ nhẹ. Trang đăng nhập: ô nhập dạng viên thuốc (cao, bo tròn hết cỡ), nút Đăng nhập chuyển màu đất nung, chữ gợi ý "Nhập tên đăng nhập" và "Nhập mật khẩu" trong ô; sửa lỗi ô mật khẩu bị lệch (khung đen của trình duyệt chồng lên khung ô) bằng một khung duy nhất cho cả nhóm ô và nút mắt, khung đỏ khi đăng nhập sai.
 - **Hai phông chữ:** tiêu đề (h1–h3) dùng Playfair Display viết hoa; menu, nội dung, nút, nhãn và bảng dùng Source Sans 3 (đủ dấu tiếng Việt, chữ nhỏ vẫn rõ). Mã, khóa và số quyết định vẫn dùng phông đơn cách. Theme đăng nhập Keycloak tự lưu cả hai phông (giấy phép SIL OFL) trong `resources/fonts`, không phụ thuộc Internet.
@@ -12,7 +14,6 @@ Số `#n` là pull request trên GitHub.
 - Trang đăng nhập: nền ảnh hai nghệ nhân chia đôi (già bên trái, trẻ bên phải, ảnh phố làng nghề ở giữa hòa bằng mặt nạ mềm), ảnh dựng theo chiều cao màn hình để giữ độ nét. Ảnh nền đăng nhập và màn hình chờ được dựng lại từ ảnh gốc (phóng bằng Lanczos, làm nét vừa phải) cho nét hơn; màn hình chờ giữ nguyên bố cục.
 - Màn hình chờ xáo ngẫu nhiên thứ tự ảnh nền mỗi lần mở, không lần nào cũng bắt đầu bằng cùng một ảnh.
 - **Màn hình chờ bằng đĩa gốm:** thay vòng tròn xoay bằng đĩa gốm xoay mỗi 4,8 giây (chậm ở đầu và cuối), nền bốn ảnh nhuộm dịu đổi nhau bằng đường quét chéo chạy cùng nhịp vòng xoay; mỗi ảnh là một lớp riêng nên không chớp khi quét xong. Chữ trạng thái nằm trong viên thuốc trắng cho rõ.
-- **Trang đăng nhập có chiều sâu:** nền ba ảnh làng nghề hòa vào nhau theo đường chéo (mặt nạ gradient, không có đường cắt cứng) phủ gradient đất nung, logo tròn nổi lên mép trên thẻ, tiêu đề căn giữa. Ảnh chỉ giữ cục bộ (không đưa lên kho mã); thiếu ảnh thì còn nền đất nung.
 - **Trang đăng nhập cùng gốc với giao diện (cổng 3000):** Next chuyển tiếp `/realms/<realm>/*` và `/resources/*` sang Keycloak, Keycloak đặt `KC_HOSTNAME` theo `FRONTEND_ORIGIN` (giao diện quản trị Keycloak vẫn ở cổng 8080, không đi qua giao diện; realm master và `/admin` không được chuyển tiếp). Issuer của token đổi theo (`http://localhost:3000/realms/dxos`); đã kiểm cổng gác APISIX, MinIO (STS), trace-api và các script kiểm chứng đều chạy đúng. Muốn như cũ: `KC_HOSTNAME_URL=http://localhost:8080`. Máy đang chạy cần `docker compose up -d keycloak` rồi `docker compose restart minio apisix`.
 - Menu trang giới thiệu: một thanh gạch chân trượt mượt theo chuột và theo phần đang xem, bấm thì lướt mượt có đà (tự viết, chạy cả khi hệ điều hành bật giảm chuyển động); mỗi phần trượt-hiện khi cuộn tới (tôn trọng giảm chuyển động).
 - Phân tích: bấm thẻ số (Tất cả, Cần xem lại, Đạt chuẩn, Chưa đủ dữ liệu) để lọc danh sách mẻ.
