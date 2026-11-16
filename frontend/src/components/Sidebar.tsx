@@ -48,8 +48,8 @@ export default function Sidebar({ open, onClose }: { open: boolean; onClose: () 
         }`}
       >
         <Link href="/" onClick={onClose} className="flex items-center gap-3 border-b border-stone-800 px-6 py-5">
-          <span className="flex h-9 w-12 items-center justify-center rounded-lg bg-white p-1">
-            <Logo className="h-full w-auto" />
+          <span className="flower-frame flex h-12 w-12 shrink-0 items-center justify-center bg-white">
+            <Logo className="h-auto w-[62%]" />
           </span>
           <span className="leading-tight">
             <span className="block font-semibold text-white">Làng Nghề Số</span>
