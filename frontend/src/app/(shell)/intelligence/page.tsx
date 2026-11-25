@@ -3,12 +3,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import Card, { PageTitle } from "@/components/Card";
 import KilnInsights from "@/components/KilnInsights";
 import KilnStatusBoard from "@/components/KilnStatusBoard";
 import Photo from "@/components/Photo";
 import ProposalsPanel from "@/components/ProposalsPanel";
-import { fetchReadings, latestBatch, toSeries, type Reading, type Series } from "@/lib/iot";
+import { fetchIotConfig, fetchReadings, latestBatch, toSeries, type BoardConfig, type Reading, type Series } from "@/lib/iot";
 
 const REFRESH_MS = 10_000;
 const metricLabel: Record<string, string> = { temperature: "Nhiệt độ", humidity: "Độ ẩm" };
@@ -64,6 +65,8 @@ function SeriesCard({ s }: { s: Series }) {
 }
 
 export default function IntelligencePage() {
+  const { apiFetch } = useAuth();
+  const [boards, setBoards] = useState<BoardConfig[]>([]);
   const [readings, setReadings] = useState<Reading[] | null>(null);
   const [objects, setObjects] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -71,15 +74,16 @@ export default function IntelligencePage() {
 
   const load = useCallback(async () => {
     try {
-      const { readings, objects } = await fetchReadings();
-      setReadings(readings);
-      setObjects(objects);
+      const [cfgRes, dataRes] = await Promise.all([fetchIotConfig(apiFetch), fetchReadings(apiFetch)]);
+      setBoards(cfgRes.boards);
+      setReadings(dataRes.readings);
+      setObjects(dataRes.objects);
       setError(null);
       setUpdatedAt(new Date());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi không xác định");
     }
-  }, []);
+  }, [apiFetch]);
 
   useEffect(() => {
     const first = setTimeout(() => void load(), 0);
@@ -91,7 +95,7 @@ export default function IntelligencePage() {
   }, [load]);
 
   const series = readings ? toSeries(readings).map((s) => latestBatch(s)) : [];
-  const others = series.filter((s) => !((s.id.startsWith("kiln") || s.id.startsWith("dye")) && s.metric === "temperature"));
+  const others = series.filter((s) => !boards.some((b) => s.id.startsWith(b.prefix) && s.metric === b.metric));
   const recent = readings ? [...readings].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).slice(0, 10) : [];
 
   return (
@@ -101,10 +105,11 @@ export default function IntelligencePage() {
         <Photo src="/illustrations/kiln.svg" className="hidden h-16 w-28 shrink-0 rounded-xl object-cover md:block" />
       </div>
 
-      {series.length > 0 && (
+      {series.length > 0 && boards.length > 0 && (
         <div className="mb-6 space-y-6">
-          <KilnStatusBoard series={series} kind="kiln" />
-          <KilnStatusBoard series={series} kind="dye" />
+          {boards.map((b) => (
+            <KilnStatusBoard key={b.id} series={series} board={b} />
+          ))}
         </div>
       )}
 

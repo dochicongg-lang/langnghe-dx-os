@@ -26,8 +26,8 @@ const { Pool, Client } = require("pg");
 const path = require("node:path");
 const access = require("./access");
 const { runMigrations } = require("./migrations");
-const { loadDevices } = require("./devices");
-const { IotError, parseWindow, createS3Client, buildEvidence } = require("./iot");
+const { loadDevices, devicesForUser } = require("./devices");
+const { IotError, parseWindow, createS3Client, buildEvidence, readLatestReadings } = require("./iot");
 const crypto = require("node:crypto");
 const ocop = require("./ocop");
 const attachments = require("./attachments");
@@ -60,6 +60,7 @@ const ACCESS = access.load(process.env.ACCESS_FILE ?? "/app/config/access.json")
 
 // Danh bạ thiết bị -> gateway sở hữu (xem devices.js). Chỉ đọc số liệu từ thư mục của gateway sở hữu thiết bị.
 const devices = loadDevices(process.env.IOT_DEVICES_FILE ?? "/app/config/iot-devices.json");
+const iotDayCache = new Map();
 
 // Tài khoản MinIO CHỈ ĐỌC (tiền tố iot/) để máy chủ tự đối chiếu số liệu cảm biến. Không cấu hình thì tắt tính năng IoT.
 const s3 =
@@ -1365,6 +1366,25 @@ async function route(req, res) {
     const user = getUser(req);
     if (!access.canApi(ACCESS, user.roles)) throw new HttpError(403, "Vai trò của bạn không dùng được API này");
     return send(res, 200, sectors.publicView(SECTORS));
+  }
+
+  if (parts[0] === "iot") {
+    const user = getUser(req);
+    if (!access.canApi(ACCESS, user.roles)) throw new HttpError(403, "Vai trò của bạn không dùng được API này");
+    const scope = access.scopeFor(ACCESS, user.roles, "product.read");
+    if (!scope) throw new HttpError(403, "Vai trò của bạn không có quyền xem dữ liệu cảm biến");
+    const allowed = devicesForUser(devices, scope, user.coop);
+    if (parts.length === 2 && parts[1] === "config" && m === "GET") {
+      return send(res, 200, {
+        boards: kiln.boardConfigs(SECTORS, KILN),
+        devices: [...allowed.entries()].map(([id, d]) => ({ id, coop: d.coop ?? null })),
+      });
+    }
+    if (parts.length === 2 && parts[1] === "readings" && m === "GET") {
+      if (!s3) throw new HttpError(503, "Chưa cấu hình kết nối kho dữ liệu cảm biến");
+      const days = url.searchParams.get("days");
+      return send(res, 200, await readLatestReadings(s3, allowed, { maxDays: days ?? 6, cache: iotDayCache }));
+    }
   }
 
   if (parts[0] === "products") {

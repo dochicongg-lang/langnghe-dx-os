@@ -14,10 +14,15 @@ trong kho mã**: các thư viện được cài qua trình quản lý gói (`npm
 | Flowable REST | `flowable/flowable-rest:7.0.1` | Apache-2.0 | Động cơ quy trình BPMN |
 | PostgreSQL | `postgres:16` | PostgreSQL License (kiểu BSD/MIT) | Dữ liệu có cấu trúc |
 | MinIO | `pgsty/minio` (ghim theo mã băm trong `docker-compose.yml`) | **AGPL-3.0** | Lưu trữ đối tượng (tệp, số liệu cảm biến, kho lạnh) |
+| ClamAV | `clamav/clamav:1.4` (ghim theo mã băm trong `docker-compose.yml`) | **GPL-2.0** | Quét mã độc tệp đính kèm tải lên (`clamd`) |
+| Caddy | `caddy:2-alpine` | Apache-2.0 | Reverse proxy HTTPS tự động (profile `prod`) |
 
 **Về MinIO (AGPL-3.0):** dự án chỉ chạy MinIO như một dịch vụ riêng, dùng ảnh Docker nguyên bản và giao tiếp qua giao thức S3 chuẩn.
 Mã của dự án **không** nhúng, liên kết hay sửa đổi mã MinIO, nên giấy phép AGPL của MinIO không áp đặt lên mã của dự án. Ảnh chính thức
 `minio/minio` đã bị gỡ khỏi Docker Hub; dự án dùng bản phân phối cộng đồng `pgsty/minio` và ghim theo mã băm để bản dựng lặp lại được.
+
+**Về ClamAV (GPL-2.0):** dự án chạy ClamAV trong container riêng từ ảnh chính thức chưa sửa đổi và chỉ giao tiếp qua giao thức TCP nội bộ (`clamd:3310`).
+Mã của dự án không nhúng, liên kết tĩnh/động hay sửa đổi mã nguồn ClamAV, nên điều khoản GPL-2.0 không lan sang mã Apache-2.0 của dự án.
 
 **Về Docker:** Docker Engine và Docker Compose là mã nguồn mở (Apache-2.0). Docker Desktop (Windows/macOS) là phần mềm riêng của
 Docker Inc., chỉ là cách tiện lợi để chạy Docker Engine; trên Linux dùng thẳng Docker Engine.
@@ -63,8 +68,9 @@ Tất cả đều là giấy phép tự do, tương thích với việc phát h�
 
 | Tài nguyên | Giấy phép | Cách dùng |
 |---|---|---|
-| Be Vietnam Pro | SIL Open Font License 1.1 | Phông giao diện, nạp lúc build qua `next/font` (không lưu trong kho mã) |
-| Geist Mono | SIL Open Font License 1.1 | Phông cho mã và khóa, nạp lúc build qua `next/font` |
+| Playfair Display | SIL Open Font License 1.1 | Phông tiêu đề (`h1`–`h3`), nạp lúc build qua `next/font/google` (không lưu trong kho mã) |
+| Source Sans 3 | SIL Open Font License 1.1 | Phông nội dung, menu, bảng, nạp lúc build qua `next/font/google` (không lưu trong kho mã) |
+| Geist Mono | SIL Open Font License 1.1 | Phông cho mã và khóa, nạp lúc build qua `next/font/google` (không lưu trong kho mã) |
 | PatternFly (trong theme đăng nhập Keycloak) | MIT | Theme đăng nhập `keycloak/themes/dxos` **kế thừa** theme `keycloak.v2` có sẵn của Keycloak; dự án chỉ thêm tệp CSS và bản dịch của riêng mình |
 
 ## 5. Tài liệu tham khảo và nội dung do dự án tự viết

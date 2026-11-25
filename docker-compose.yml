@@ -14,6 +14,8 @@ volumes:
   minio-data:
   etcd-data:
   clamav-db:
+  caddy-data:
+  caddy-config:
 
 services:
   # ---- Data: SQL ----
@@ -268,5 +270,56 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    networks:
+      - dxos-net
+
+  # ---- Tầng 2 (Giao diện Next.js) ----
+  frontend:
+    build: ./frontend
+    image: dxos/frontend:local
+    container_name: dxos-frontend
+    restart: unless-stopped
+    environment:
+      PUBLIC_API_PROXY_TARGET: http://apisix:9080
+      KEYCLOAK_PROXY_TARGET: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      NEXT_PUBLIC_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      NEXT_PUBLIC_IOT_BUCKET: ${IOT_BUCKET:-dxos-iot}
+    depends_on:
+      apisix:
+        condition: service_started
+      trace-api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/gioi-thieu >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - dxos-net
+
+  # ---- Reverse Proxy HTTPS tự động (chỉ bật khi chạy profile prod) ----
+  caddy:
+    image: caddy:2-alpine
+    container_name: dxos-caddy
+    restart: unless-stopped
+    profiles: ["prod"]
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
     networks:
       - dxos-net

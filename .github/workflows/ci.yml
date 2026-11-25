@@ -48,6 +48,9 @@ jobs:
           npx tsc --noEmit
           npx eslint src
 
+      - name: Kiểm tra giấy phép phụ thuộc và đồng bộ THIRD-PARTY-NOTICES
+        run: node scripts/check-licenses.js
+
       - name: Script tạo .env
         run: bash scripts/tests/test-env-sync.sh
 

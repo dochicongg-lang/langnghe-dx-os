@@ -14,6 +14,11 @@ export interface Sector {
   key: string;
   label: string;
   intelligence: string | null; // "kiln" = có phân tích mẻ nung; null = chưa có phân tích riêng
+  analysis?: string | null;
+  profile?: string | null;
+  devicePrefix?: string | null;
+  defaultDevice?: string | null;
+  sensorStage?: string | null;
   ocopGroup?: string | null; // nhóm sản phẩm OCOP của ngành
   stages: SectorStage[];
 }

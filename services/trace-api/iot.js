@@ -347,4 +347,102 @@ async function buildEvidence(win, s3, gateway, limits = {}) {
   return { ...evidence, quality, gateway, verifiedAt: new Date().toISOString() };
 }
 
-module.exports = { IotError, parseWindow, keyTime, folderOf, dayPrefixes, selectKeys, collectPoints, assess, summarize, createS3Client, buildEvidence };
+const MAX_CACHE_ENTRIES = 64;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseNdjsonReadings(body) {
+  const out = [];
+  for (const line of body.split("\n")) {
+    if (!line.trim()) continue;
+    let r;
+    try {
+      r = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof r?.deviceId !== "string" || !Number.isFinite(r?.value) || typeof r?.timestamp !== "string") continue;
+    out.push({
+      deviceId: r.deviceId,
+      deviceName: typeof r.deviceName === "string" ? r.deviceName : r.deviceId,
+      metric: typeof r.metric === "string" ? r.metric : METRIC,
+      value: r.value,
+      unit: typeof r.unit === "string" ? r.unit : "",
+      timestamp: r.timestamp,
+    });
+  }
+  return out;
+}
+
+/**
+ * Đọc các tệp NDJSON mới nhất cho tập thiết bị đã được lọc theo quyền HTX (`allowedDevices`).
+ * Chỉ liệt kê thư mục của các gateway sở hữu thiết bị được phép và lọc chéo `cfg.gateway === gw`.
+ */
+async function readLatestReadings(s3, allowedDevices, opts = {}) {
+  if (!allowedDevices || allowedDevices.size === 0) return { readings: [], objects: 0 };
+  const rawDays = Number.parseInt(opts.maxDays ?? 6, 10);
+  const maxDays = Math.min(14, Math.max(1, Number.isFinite(rawDays) ? rawDays : 6));
+  const cache = opts.cache ?? null;
+  const now = opts.now ?? Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+
+  const gateways = [...new Set([...allowedDevices.values()].map((d) => d.gateway))];
+  const gwLists = await Promise.all(
+    gateways.map(async (gw) => ({
+      gw,
+      keys: await s3.listKeys(`iot/${folderOf(gw)}/`),
+    })),
+  );
+
+  const byDay = new Map();
+  for (const { gw, keys } of gwLists) {
+    for (const k of keys) {
+      if (!k.endsWith(".ndjson")) continue;
+      const day = k.split("/")[2] ?? "";
+      if (!DAY_RE.test(day)) continue;
+      let gwMap = byDay.get(day);
+      if (!gwMap) byDay.set(day, (gwMap = new Map()));
+      let arr = gwMap.get(gw);
+      if (!arr) gwMap.set(gw, (arr = []));
+      arr.push(k);
+    }
+  }
+
+  const days = [...byDay.keys()].sort().reverse().slice(0, maxDays);
+  const readings = [];
+  const seen = new Set();
+  let objects = 0;
+
+  for (const day of days) {
+    const gwMap = byDay.get(day);
+    for (const [gw, rawKeys] of gwMap.entries()) {
+      const dayKeys = [...rawKeys].sort((a, b) => a.localeCompare(b));
+      const cacheKey = `${gw}/${day}`;
+      let part = cache && day < today ? cache.get(cacheKey) : undefined;
+      if (!part) {
+        const bodies = [];
+        for (let i = 0; i < dayKeys.length; i += 20) {
+          bodies.push(...(await Promise.all(dayKeys.slice(i, i + 20).map((k) => s3.getObject(k)))));
+        }
+        part = bodies.flatMap(parseNdjsonReadings);
+        if (cache && day < today) {
+          if (cache.size >= MAX_CACHE_ENTRIES) {
+            const oldest = cache.keys().next().value;
+            if (oldest !== undefined) cache.delete(oldest);
+          }
+          cache.set(cacheKey, part);
+        }
+      }
+      objects += dayKeys.length;
+      for (const r of part) {
+        const cfg = allowedDevices.get(r.deviceId);
+        if (!cfg || cfg.gateway !== gw) continue;
+        readings.push(r);
+        seen.add(r.deviceId);
+      }
+    }
+    if ([...allowedDevices.keys()].every((id) => seen.has(id))) break;
+  }
+  return { readings, objects };
+}
+
+module.exports = { IotError, parseWindow, keyTime, folderOf, dayPrefixes, selectKeys, collectPoints, assess, summarize, createS3Client, buildEvidence, readLatestReadings };

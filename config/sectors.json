@@ -12,6 +12,9 @@
       ],
       "intelligence": "kiln",
       "analysis": "kiln",
+      "profile": "gom-men-rach",
+      "devicePrefix": "kiln",
+      "defaultDevice": "kiln-01",
       "sensorStage": "nung-hoan-thien",
       "stages": [
         {
@@ -58,6 +61,9 @@
       ],
       "intelligence": "dye",
       "analysis": "dye",
+      "profile": "lua-nhuom",
+      "devicePrefix": "dye",
+      "defaultDevice": "dye-01",
       "sensorStage": "nhuom-hoan-thien",
       "stages": [
         {

@@ -15,3 +15,15 @@ dist/
 # Ảnh nền đăng nhập (ảnh có bản quyền của tác giả, chỉ giữ cục bộ, không đưa lên kho mã)
 keycloak/themes/dxos/login/resources/img/bg-*.webp
 frontend/public/photos/*.webp
+
+# Tệp cấu hình và script tiện ích cục bộ máy cá nhân (không đưa lên kho mã)
+docker-compose.override.yml
+.claude/
+auto-start.vbs
+cai-dat-windows-service.bat
+go-bo-windows-service.bat
+install-services.ps1
+start-frontend.cmd
+start-tunnel.cmd
+xem-url-hien-tai.bat
+scripts/rollback-deploy.bat

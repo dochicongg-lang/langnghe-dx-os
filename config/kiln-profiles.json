@@ -34,6 +34,15 @@
       "baseline": {
         "minRuns": 3,
         "maxDeviationPct": 6
+      },
+      "board": {
+        "scaleMax": 1400,
+        "ticks": [0, 400, 800, 1200],
+        "nearBand": 30,
+        "cold": { "last": 80, "peak": 200 },
+        "phases": ["Chuẩn bị", "Gia nhiệt", "Giữ nhiệt", "Làm nguội"],
+        "total": "Tổng thời gian nung",
+        "peakNote": "Vùng đỉnh chuẩn"
       }
     },
     "lua-nhuom": {
@@ -64,6 +73,15 @@
       "baseline": {
         "minRuns": 3,
         "maxDeviationPct": 5
+      },
+      "board": {
+        "scaleMax": 120,
+        "ticks": [0, 40, 80, 120],
+        "nearBand": 4,
+        "cold": { "last": 40, "peak": 45 },
+        "phases": ["Chuẩn bị bể", "Nâng nhiệt", "Giữ nhiệt", "Hạ nhiệt"],
+        "total": "Tổng thời gian nhuộm",
+        "peakNote": "Vùng nhiệt nhuộm"
       },
       "terms": {
         "profile": "hồ sơ nhuộm",

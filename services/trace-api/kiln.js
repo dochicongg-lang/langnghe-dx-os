@@ -53,6 +53,26 @@ function validateProfiles(cfg) {
       const bad = typeof p.terms !== "object" || p.terms === null || Object.entries(p.terms).some(([k, v]) => !(k in DEFAULT_TERMS) || typeof v !== "string" || !v);
       if (bad) throw new Error(`${w}: terms chỉ nhận các khóa ${Object.keys(DEFAULT_TERMS).join(", ")} với giá trị là chuỗi không rỗng`);
     }
+    if (p.board !== undefined) {
+      const b = p.board;
+      if (typeof b !== "object" || b === null || Array.isArray(b)) throw new Error(`${w}: board phải là đối tượng`);
+      if (b.scaleMax !== undefined) num(b.scaleMax, "board.scaleMax");
+      if (b.nearBand !== undefined) num(b.nearBand, "board.nearBand");
+      if (b.ticks !== undefined && (!Array.isArray(b.ticks) || b.ticks.some((v) => typeof v !== "number" || !Number.isFinite(v)))) {
+        throw new Error(`${w}: board.ticks phải là mảng số`);
+      }
+      if (b.cold !== undefined) {
+        if (typeof b.cold !== "object" || b.cold === null || !Number.isFinite(b.cold.last) || !Number.isFinite(b.cold.peak)) {
+          throw new Error(`${w}: board.cold cần có số last và peak`);
+        }
+      }
+      if (b.phases !== undefined && (!Array.isArray(b.phases) || b.phases.length !== 4 || b.phases.some((s) => typeof s !== "string" || !s))) {
+        throw new Error(`${w}: board.phases phải là mảng 4 chuỗi không rỗng`);
+      }
+      for (const k of ["total", "peakNote", "recent", "aria"]) {
+        if (b[k] !== undefined && (typeof b[k] !== "string" || !b[k])) throw new Error(`${w}: board.${k} phải là chuỗi không rỗng`);
+      }
+    }
   }
   for (const k of cfg.byKeyword ?? []) {
     if (!Array.isArray(k.match) || k.match.length === 0 || !cfg.profiles[k.profile]) throw new Error("kiln-profiles.json: byKeyword cần match (danh sách) và profile có thật");
@@ -280,4 +300,63 @@ function compareToReference(curve, ref, terms = {}) {
   return { level: "warn", text: `Từ khoảng giờ thứ ${hour(best.start)} đến giờ thứ ${hour(best.end)}, ${T.batch} này ${best.side > 0 ? "cao hơn" : "thấp hơn"} dải thường gặp của các ${T.batch} đạt khoảng ${diff} °C.` };
 }
 
-module.exports = { loadProfiles, validateProfiles, pickProfile, publicAllows, minutesAbove, maxRatePerHour, analyze, resampleCurve, referenceCurve, compareToReference };
+function autoScale(criticalMax) {
+  const steps = [10, 20, 25, 40, 50, 100, 200, 250, 400, 500, 1000];
+  const step = steps.find((st) => st * 3 >= criticalMax * 0.85) ?? Math.ceil(criticalMax / 3 / 100) * 100;
+  const scaleMax = Math.max(Math.ceil((criticalMax * 1.07) / step) * step, criticalMax + Math.round(step / 2));
+  const ticks = [0, step, step * 2, step * 3].filter((v) => v <= scaleMax);
+  return { scaleMax, ticks };
+}
+
+/** Sinh danh sách cấu hình bảng theo dõi cảm biến động từ `config/sectors.json` và `config/kiln-profiles.json`. */
+function boardConfigs(sectorsCfg, kilnCfg) {
+  const out = [];
+  for (const s of sectorsCfg?.sectors ?? []) {
+    if (!s.profile && !s.analysis) continue;
+    const profileId = s.profile && kilnCfg.profiles[s.profile] ? s.profile : pickProfile(kilnCfg, s.label).id;
+    const p = kilnCfg.profiles[profileId];
+    if (!p) continue;
+    const b = p.board ?? {};
+    const terms = { ...DEFAULT_TERMS, ...(p.terms ?? {}) };
+    const auto = autoScale(p.criticalMax);
+    const scaleMax = b.scaleMax ?? auto.scaleMax;
+    const ticks = b.ticks ?? auto.ticks;
+    const nearBand = b.nearBand ?? Math.max(2, Math.round((p.peak.max - p.peak.min) * 0.25));
+    const cold = b.cold ?? { last: Math.max(35, Math.round(p.ramp.fromC * 0.27)), peak: Math.max(45, Math.round(p.ramp.fromC * 0.67)) };
+    out.push({
+      id: s.key,
+      sectorKey: s.key,
+      sectorLabel: s.label,
+      profileId,
+      prefix: s.devicePrefix ?? s.analysis ?? s.key,
+      metric: "temperature",
+      unit: "°C",
+      scaleMax,
+      ticks,
+      ref: {
+        peakMin: p.peak.min,
+        peakMax: p.peak.max,
+        critical: p.criticalMax,
+        holdAbove: p.hold.aboveC,
+        holdMinutes: p.hold.minMinutes,
+        rampMaxPerHour: p.ramp.maxPerHour,
+      },
+      nearBand,
+      rampFrom: p.ramp.fromC,
+      rampWindowMin: p.ramp.windowMin,
+      cold,
+      labels: {
+        phases: b.phases ?? ["Chuẩn bị", "Nâng nhiệt", "Giữ nhiệt", "Hạ nhiệt"],
+        total: b.total ?? `Tổng thời gian ${terms.batch}`,
+        recent: b.recent ?? `${terms.batchCap} gần nhất`,
+        aria: b.aria ?? `Các giai đoạn của ${terms.batch}`,
+        device: terms.equipment,
+        peakNote: b.peakNote ?? `Vùng đỉnh chuẩn (${p.name})`,
+        note: p.note ?? "",
+      },
+    });
+  }
+  return out;
+}
+
+module.exports = { loadProfiles, validateProfiles, pickProfile, publicAllows, minutesAbove, maxRatePerHour, analyze, resampleCurve, referenceCurve, compareToReference, boardConfigs };

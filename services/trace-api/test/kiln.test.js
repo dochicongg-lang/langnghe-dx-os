@@ -238,3 +238,49 @@ test("compareToReference: dùng từ ngữ của nghề (mẻ nhuộm)", () => {
   const t = kiln.compareToReference(ramp(120), ref, { curve: "Đường cong nhuộm", batch: "mẻ nhuộm" });
   assert.match(t.text, /mẻ nhuộm/);
 });
+
+test("boardConfigs: tự sinh cấu hình bảng theo dõi từ sectors + kiln-profiles kể cả khi thêm ngành thứ 3 không khai báo board", () => {
+  const sectors = require("../sectors");
+  const baseSectors = sectors.load(path.join(__dirname, "..", "..", "..", "config", "sectors.json"));
+  const boards = kiln.boardConfigs(baseSectors, CFG);
+  assert.deepEqual(boards.map((b) => [b.id, b.prefix, b.profileId]), [
+    ["gom", "kiln", "gom-men-rach"],
+    ["lua", "dye", "lua-nhuom"],
+  ]);
+
+  // Thêm ngành thứ 3 ("che") + hồ sơ mới ("che-sao") KHÔNG có trường board -> phải tự tính đầy đủ
+  const extSectors = JSON.parse(JSON.stringify(baseSectors));
+  extSectors.sectors.push({
+    key: "che",
+    label: "Chè sao truyền thống",
+    match: ["chè"],
+    analysis: "tea",
+    profile: "che-sao",
+    devicePrefix: "tea",
+    stages: [{ key: "hai", label: "Hái" }, { key: "sao", label: "Sao" }],
+  });
+  const extKiln = JSON.parse(JSON.stringify(CFG));
+  extKiln.profiles["che-sao"] = {
+    name: "Sao chè xanh",
+    verified: false,
+    note: "Ngưỡng tham khảo sao chè",
+    minSamples: 10,
+    peak: { min: 130, max: 160 },
+    criticalMax: 190,
+    hold: { aboveC: 120, minMinutes: 20 },
+    ramp: { fromC: 40, maxPerHour: 180, windowMin: 10 },
+    cooling: { fromC: 130, toC: 50, maxPerHour: 200, windowMin: 10 },
+    baseline: { minRuns: 3, maxDeviationPct: 8 },
+    terms: { profile: "hồ sơ sao chè", curve: "Đường cong sao", batch: "mẻ sao", batchCap: "Mẻ sao", equipment: "tôn sao", criticalNote: "cháy lá chè", peakLowNote: "chưa diệt men", rampNote: "tăng nhiệt quá gắt", coolNote: "nguội quá nhanh" },
+  };
+  kiln.validateProfiles(extKiln);
+  const extBoards = kiln.boardConfigs(extSectors, extKiln);
+  assert.equal(extBoards.length, 3);
+  const teaBoard = extBoards[2];
+  assert.equal(teaBoard.id, "che");
+  assert.equal(teaBoard.prefix, "tea");
+  assert.ok(teaBoard.scaleMax > 190);
+  assert.ok(teaBoard.ticks.length >= 3);
+  assert.equal(teaBoard.labels.device, "tôn sao");
+  assert.equal(teaBoard.ref.peakMin, 130);
+});

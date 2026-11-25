@@ -3,24 +3,28 @@
   "devices": {
     "kiln-01": {
       "gateway": "dxos-iot",
+      "coop": "htx-demo",
       "min": 0,
       "max": 1400,
       "maxRatePerSec": 30
     },
     "workshop-01": {
       "gateway": "dxos-iot",
+      "coop": "htx-demo",
       "min": -10,
       "max": 60,
       "maxRatePerSec": 5
     },
     "clay-store-01": {
       "gateway": "dxos-iot",
+      "coop": "htx-demo",
       "min": -10,
       "max": 60,
       "maxRatePerSec": 5
     },
     "dye-01": {
       "gateway": "dxos-iot",
+      "coop": "htx-lua",
       "min": 0,
       "max": 110,
       "maxRatePerSec": 2
