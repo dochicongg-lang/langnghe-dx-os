@@ -51,6 +51,9 @@ jobs:
       - name: Kiểm tra giấy phép phụ thuộc và đồng bộ THIRD-PARTY-NOTICES
         run: node scripts/check-licenses.js
 
+      - name: Kiểm tra JSON Schema cấu hình và OpenAPI 3.1
+        run: node scripts/validate-schemas.js
+
       - name: Script tạo .env
         run: bash scripts/tests/test-env-sync.sh
 
@@ -58,3 +61,69 @@ jobs:
         run: |
           cp .env.example .env
           docker compose config --quiet
+
+  integration:
+    name: Kiểm thử tích hợp Docker thật (Zero-Trust, OCOP BPMN, Audit)
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Khởi tạo .env và dựng hệ thống lõi (Docker Compose)
+        run: |
+          bash -c '. scripts/lib-env.sh && sync_env .env.example .env >/dev/null'
+          {
+            echo "CLAMAV_HOST="
+            echo "CLAMAV_REQUIRED=false"
+          } >> .env
+          docker compose up -d --build postgres minio keycloak flowable etcd apisix trace-api
+
+      - name: Chờ dịch vụ sẵn sàng và cấu hình Keycloak / APISIX / Flowable
+        run: |
+          set -a; . ./.env; set +a
+          for c in dxos-postgres dxos-minio dxos-keycloak dxos-etcd dxos-apisix dxos-trace-api; do
+            echo "Chờ $c..."
+            for i in $(seq 1 60); do
+              s=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$c" 2>/dev/null || echo none)
+              if [ "$s" = healthy ] || [ "$s" = running ]; then break; fi
+              [ "$i" = 60 ] && { echo "$c chưa sẵn sàng ($s)"; exit 1; }
+              sleep 3
+            done
+          done
+          for i in $(seq 1 40); do
+            curl -fs -H "X-API-KEY: $APISIX_ADMIN_KEY" "http://localhost:${APISIX_ADMIN_PORT}/apisix/admin/routes" >/dev/null && break
+            [ "$i" = 40 ] && { echo "APISIX Admin API không phản hồi"; exit 1; }
+            sleep 3
+          done
+          for i in $(seq 1 40); do
+            docker exec dxos-flowable sh -c "curl -fs http://127.0.0.1:8080/flowable-rest/service/actuator/health" >/dev/null 2>&1 && break
+            curl -fs "http://localhost:${KC_PORT:-8080}/realms/${KEYCLOAK_REALM}" >/dev/null 2>&1 || true
+            sleep 3
+          done
+          bash scripts/setup-keycloak-roles.sh
+          bash scripts/setup-keycloak-login.sh
+          bash scripts/setup-apisix-routes.sh
+          bash scripts/setup-ocop-workflow.sh
+
+      - name: Chạy kiểm thử tích hợp thật (Zero-Trust, OCOP Flowable, Audit Log)
+        run: |
+          node scripts/demo-zero-trust.js
+          node scripts/check-ocop-flow.js
+          node scripts/check-audit-log.js
+
+      - name: Thu thập nhật ký khi thất bại
+        if: failure()
+        run: |
+          docker compose ps
+          docker logs --tail 100 dxos-trace-api || true
+          docker logs --tail 100 dxos-apisix || true
+          docker logs --tail 100 dxos-flowable || true
+
+      - name: Dọn dẹp container sau kiểm thử
+        if: always()
+        run: docker compose down -v

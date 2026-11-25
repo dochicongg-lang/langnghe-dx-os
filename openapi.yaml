@@ -1,0 +1,422 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 The Làng Nghề Số contributors
+openapi: 3.1.0
+info:
+  title: Làng Nghề Số · DX-OS Open-Core API
+  version: 1.0.0
+  summary: API truy xuất nguồn gốc làng nghề, giám sát cảm biến IoT, hỗ trợ hồ sơ OCOP (Flowable BPMN) và hồ dữ liệu phân tích.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: /api/trace/v1
+    description: Tuyến chuẩn có phiên bản đi qua APISIX + Keycloak JWT
+  - url: /api/trace
+    description: Bí danh tương thích ngược (APISIX -> trace-api)
+  - url: /api/public/trace
+    description: Tuyến công khai không cần đăng nhập (giới hạn tần suất)
+security:
+  - keycloakBearer: []
+tags:
+  - name: System
+    description: Sức khỏe dịch vụ, tài liệu OpenAPI và cấu hình ngành nghề
+  - name: Traceability
+    description: Sản phẩm và dòng thời gian công đoạn
+  - name: IoT
+    description: Cảm biến lò nung / bể nhuộm đọc trực tiếp từ MinIO Object Lock
+  - name: OCOP
+    description: Hỗ trợ hồ sơ OCOP, Hội đồng chấm điểm song song và xuất biên bản PDF
+  - name: Alerting
+    description: Đề xuất cảnh báo theo ngưỡng có kiểm duyệt (Human-in-the-loop)
+  - name: Lakehouse
+    description: Hồ dữ liệu Parquet phân vùng Hive và truy vấn DuckDB
+  - name: Audit
+    description: Nhật ký kiểm toán nối chuỗi băm, neo Object Lock và lưu trữ vòng đời
+  - name: Members
+    description: Mời và quản lý thành viên theo HTX
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      summary: Kiểm tra tình trạng hoạt động của trace-api
+      security: []
+      responses:
+        "200":
+          description: Dịch vụ sẵn sàng
+  /openapi.yaml:
+    get:
+      tags: [System]
+      summary: Tải đặc tả OpenAPI 3.1 dạng YAML
+      security: []
+      responses:
+        "200":
+          description: Đặc tả OpenAPI 3.1
+  /docs:
+    get:
+      tags: [System]
+      summary: Trang tài liệu API tương tác (Scalar UI)
+      security: []
+      responses:
+        "200":
+          description: Trang HTML tài liệu API
+  /me:
+    get:
+      tags: [System]
+      summary: Thông tin người dùng, vai trò và quyền hiệu lực từ Keycloak + access.json
+      responses:
+        "200":
+          description: Thông tin phiên hiện tại
+  /sectors:
+    get:
+      tags: [System]
+      summary: Danh sách ngành nghề, chuỗi công đoạn và thiết bị mặc định
+      responses:
+        "200":
+          description: Cấu hình ngành nghề công khai
+  /public/{code}:
+    get:
+      tags: [Traceability]
+      summary: Tra cứu công khai sản phẩm bằng mã QR (ẩn thông tin nội bộ)
+      security: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chi tiết sản phẩm công khai
+        "404":
+          description: Không tìm thấy sản phẩm
+  /products:
+    get:
+      tags: [Traceability]
+      summary: Danh sách sản phẩm trong phạm vi HTX của người dùng
+      responses:
+        "200":
+          description: Danh sách sản phẩm
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductSummary"
+    post:
+      tags: [Traceability]
+      summary: Tạo mới sản phẩm truy xuất nguồn gốc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                code:
+                  type: string
+                name:
+                  type: string
+                category:
+                  type: string
+                village:
+                  type: string
+                artisan:
+                  type: string
+                coop:
+                  type: string
+      responses:
+        "201":
+          description: Đã tạo sản phẩm
+  /products/{code}:
+    get:
+      tags: [Traceability]
+      summary: Chi tiết sản phẩm và phân tích đường cong nhiệt
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chi tiết sản phẩm
+  /products/{code}/events:
+    post:
+      tags: [Traceability]
+      summary: Ghi nhận công đoạn mới (tùy chọn đính kèm cửa sổ IoT để máy chủ tự đối chiếu)
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Đã ghi công đoạn
+  /iot/config:
+    get:
+      tags: [IoT]
+      summary: Cấu hình bảng theo dõi cảm biến động theo ngành và thiết bị thuộc HTX
+      responses:
+        "200":
+          description: Danh sách BoardConfig và thiết bị được phép xem
+  /iot/readings:
+    get:
+      tags: [IoT]
+      summary: Đọc số liệu cảm biến gần nhất từ MinIO (lọc theo HTX của JWT)
+      parameters:
+        - name: days
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 14
+      responses:
+        "200":
+          description: Dữ liệu cảm biến đã lọc theo HTX
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IotReadingsResponse"
+  /insights/kilns:
+    get:
+      tags: [IoT]
+      summary: Tổng hợp kết luận mẻ nung/nhuộm trong phạm vi HTX
+      responses:
+        "200":
+          description: Danh sách kết luận
+  /applications/profile:
+    get:
+      tags: [OCOP]
+      summary: Cấu hình thang điểm, hạng sao và danh mục giấy tờ OCOP hiện hành
+      responses:
+        "200":
+          description: Hồ sơ tiêu chí OCOP
+  /applications:
+    get:
+      tags: [OCOP]
+      summary: Danh sách hồ sơ OCOP trong phạm vi quyền
+      responses:
+        "200":
+          description: Danh sách hồ sơ
+    post:
+      tags: [OCOP]
+      summary: Tạo hồ sơ OCOP mới
+      responses:
+        "201":
+          description: Đã tạo hồ sơ nháp
+  /applications/{code}:
+    get:
+      tags: [OCOP]
+      summary: Chi tiết hồ sơ OCOP kèm điểm Hội đồng và nhiệm vụ Flowable
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Chi tiết hồ sơ OCOP
+    put:
+      tags: [OCOP]
+      summary: Cập nhật hồ sơ nháp hoặc cần bổ sung
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Đã cập nhật
+  /applications/{code}/actions:
+    post:
+      tags: [OCOP]
+      summary: Thực hiện chuyển trạng thái quy trình OCOP qua Flowable BPMN
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Đã chuyển bước quy trình
+  /applications/{code}/council:
+    get:
+      tags: [OCOP]
+      summary: Xem bảng tổng hợp điểm chấm độc lập của Hội đồng OCOP
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Điểm trung bình và danh sách phiếu chấm
+  /applications/{code}/council/scores:
+    post:
+      tags: [OCOP]
+      summary: Thành viên Hội đồng OCOP nộp phiếu chấm điểm độc lập (hoàn thành task Multi-Instance)
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Đã ghi phiếu chấm và cập nhật điểm trung bình Hội đồng
+  /applications/{code}/minutes.pdf:
+    get:
+      tags: [OCOP]
+      summary: Xuất biên bản chấm điểm Hội đồng OCOP định dạng PDF kèm mã băm SHA-256
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tệp PDF biên bản
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /alerts/proposals:
+    get:
+      tags: [Alerting]
+      summary: Danh sách cảnh báo đề xuất theo ngưỡng chờ kiểm duyệt (Human-in-the-loop)
+      responses:
+        "200":
+          description: Danh sách đề xuất cảnh báo
+  /alerts/proposals/{id}/decide:
+    post:
+      tags: [Alerting]
+      summary: Duyệt hoặc từ chối một cảnh báo đề xuất
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Đã cập nhật trạng thái đề xuất
+  /alerts/scan:
+    post:
+      tags: [Alerting]
+      summary: Quản trị viên quét thủ công các công đoạn có IoT để sinh đề xuất cảnh báo
+      responses:
+        "200":
+          description: Kết quả quét
+  /lake:
+    get:
+      tags: [Lakehouse]
+      summary: Tổng quan các bộ dữ liệu Parquet và danh sách truy vấn DuckDB
+      responses:
+        "200":
+          description: Thông tin các lần xuất và truy vấn
+  /lake/export:
+    post:
+      tags: [Lakehouse]
+      summary: Xuất dữ liệu sang Parquet phân vùng Hive trong bucket riêng `dxos-lake`
+      responses:
+        "200":
+          description: Kết quả xuất kèm đường dẫn manifest và SHA-256
+  /lake/analytics/{name}:
+    get:
+      tags: [Lakehouse]
+      summary: Chạy truy vấn phân tích cố định bằng DuckDB có lọc phân vùng (partition pruning)
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: coop
+          in: query
+          schema:
+            type: string
+        - name: year
+          in: query
+          schema:
+            type: string
+        - name: month
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Kết quả truy vấn DuckDB
+  /overview:
+    get:
+      tags: [Traceability]
+      summary: Tổng quan điều hành theo phạm vi HTX hoặc toàn hệ thống
+      responses:
+        "200":
+          description: Số liệu tổng hợp
+  /audit:
+    get:
+      tags: [Audit]
+      summary: Truy vấn nhật ký kiểm toán nối chuỗi băm
+      responses:
+        "200":
+          description: Danh sách bản ghi nhật ký
+  /audit/verify:
+    get:
+      tags: [Audit]
+      summary: Kiểm tra toàn vẹn chuỗi băm và bản neo Object Lock
+      responses:
+        "200":
+          description: Kết quả kiểm chứng
+  /members:
+    get:
+      tags: [Members]
+      summary: Danh sách thành viên và lời mời theo HTX
+      responses:
+        "200":
+          description: Danh sách thành viên
+components:
+  securitySchemes:
+    keycloakBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ProductSummary:
+      type: object
+      properties:
+        code: { type: string }
+        name: { type: string }
+        category: { type: string }
+        sector: { type: string }
+        coop: { type: [string, "null"] }
+        event_count: { type: integer }
+    IotReadingsResponse:
+      type: object
+      properties:
+        objects: { type: integer }
+        readings:
+          type: array
+          items:
+            type: object
+            properties:
+              deviceId: { type: string }
+              deviceName: { type: string }
+              metric: { type: string }
+              value: { type: number }
+              unit: { type: string }
+              timestamp: { type: string, format: date-time }
+    Error:
+      type: object
+      properties:
+        error: { type: string }

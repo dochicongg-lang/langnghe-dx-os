@@ -50,11 +50,20 @@ function createFlowableClient({ baseUrl, apiKey, user, password, fetchImpl = fet
       if (!task) throw new FlowableError(`Tiến trình ${instanceId} không có nhiệm vụ "${taskKey}" đang mở`);
       await call("POST", `/runtime/tasks/${task.id}`, { action: "complete", variables: vars(variables) });
     },
-    /** Nhiệm vụ đang mở của tiến trình (để hiển thị hồ sơ đang ở bước nào của quy trình). */
+    /** Nhiệm vụ đang mở đầu tiên của tiến trình (để hiển thị hồ sơ đang ở bước nào của quy trình). */
     async openTask(instanceId) {
       const r = await call("GET", `/runtime/tasks?processInstanceId=${encodeURIComponent(instanceId)}`);
       const t = r.data?.[0];
       return t ? { key: t.taskDefinitionKey, name: t.name } : null;
+    },
+    /** Toàn bộ nhiệm vụ đang mở (kể cả timer nhắc hạn và các phiếu chấm song song của Hội đồng). */
+    async openTasks(instanceId) {
+      const r = await call("GET", `/runtime/tasks?processInstanceId=${encodeURIComponent(instanceId)}`);
+      return (r.data ?? []).map((t) => ({ id: t.id, key: t.taskDefinitionKey, name: t.name, assignee: t.assignee ?? null }));
+    },
+    /** Hoàn thành một task cụ thể theo `task.id` (dùng cho Multi-Instance chấm điểm độc lập). */
+    async completeTaskId(taskId, variables = {}) {
+      await call("POST", `/runtime/tasks/${encodeURIComponent(taskId)}`, { action: "complete", variables: vars(variables) });
     },
   };
 }

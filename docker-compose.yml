@@ -239,6 +239,10 @@ services:
       ARCHIVE_INTERVAL_HOURS: ${ARCHIVE_INTERVAL_HOURS:-24}
       DOCS_S3_ACCESS_KEY: ${TRACE_DOCS_USER}
       DOCS_S3_SECRET_KEY: ${TRACE_DOCS_PASSWORD}
+      LAKE_BUCKET: ${LAKE_BUCKET:-dxos-lake}
+      LAKE_S3_ACCESS_KEY: ${LAKE_S3_USER}
+      LAKE_S3_SECRET_KEY: ${LAKE_S3_PASSWORD}
+      OPENAPI_FILE: /app/openapi.yaml
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       NOTIFY_INTERVAL_MINUTES: ${NOTIFY_INTERVAL_MINUTES:-60}
       LAKE_INTERVAL_HOURS: ${LAKE_INTERVAL_HOURS:-24}
@@ -258,6 +262,7 @@ services:
       - ./config/kiln-profiles.json:/app/config/kiln-profiles.json:ro
       - ./config/sectors.json:/app/config/sectors.json:ro
       - ./config/assistant-faq.json:/app/config/assistant-faq.json:ro
+      - ./openapi.yaml:/app/openapi.yaml:ro
     depends_on:
       postgres:
         condition: service_healthy

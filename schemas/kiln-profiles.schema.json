@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://langnghe-dx-os.local/schemas/kiln-profiles.schema.json",
+  "title": "DX-OS Thermal & Kiln Profiles Configuration",
+  "description": "Chuẩn hóa hồ sơ phân tích đường cong nhiệt cho các ngành nghề (config/kiln-profiles.json).",
+  "type": "object",
+  "required": ["defaultProfile", "profiles"],
+  "additionalProperties": false,
+  "properties": {
+    "_doc": { "type": "string" },
+    "defaultProfile": { "type": "string", "pattern": "^[a-z0-9-]{2,60}$" },
+    "publicInsight": { "type": "string", "enum": ["all", "ok-only", "none"] },
+    "byCategory": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[a-z0-9-]{2,60}$" }
+    },
+    "byKeyword": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["match", "profile"],
+        "additionalProperties": false,
+        "properties": {
+          "match": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "profile": { "type": "string", "pattern": "^[a-z0-9-]{2,60}$" }
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-z0-9-]{2,60}$": { "$ref": "#/$defs/profile" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "profile": {
+      "type": "object",
+      "required": ["name", "verified", "minSamples", "peak", "criticalMax", "hold", "ramp", "cooling", "baseline"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "verified": { "type": "boolean" },
+        "note": { "type": "string" },
+        "minSamples": { "type": "number", "minimum": 1 },
+        "criticalMax": { "type": "number", "minimum": 1 },
+        "peak": {
+          "type": "object",
+          "required": ["min", "max"],
+          "additionalProperties": false,
+          "properties": {
+            "min": { "type": "number", "minimum": 0 },
+            "max": { "type": "number", "minimum": 1 }
+          }
+        },
+        "hold": {
+          "type": "object",
+          "required": ["aboveC", "minMinutes"],
+          "additionalProperties": false,
+          "properties": {
+            "aboveC": { "type": "number", "minimum": 0 },
+            "minMinutes": { "type": "number", "minimum": 1 }
+          }
+        },
+        "ramp": {
+          "type": "object",
+          "required": ["fromC", "maxPerHour", "windowMin"],
+          "additionalProperties": false,
+          "properties": {
+            "fromC": { "type": "number", "minimum": 0 },
+            "maxPerHour": { "type": "number", "minimum": 1 },
+            "windowMin": { "type": "number", "minimum": 1 }
+          }
+        },
+        "cooling": {
+          "type": "object",
+          "required": ["fromC", "toC", "maxPerHour", "windowMin"],
+          "additionalProperties": false,
+          "properties": {
+            "fromC": { "type": "number", "minimum": 1 },
+            "toC": { "type": "number", "minimum": 0 },
+            "maxPerHour": { "type": "number", "minimum": 1 },
+            "windowMin": { "type": "number", "minimum": 1 }
+          }
+        },
+        "baseline": {
+          "type": "object",
+          "required": ["minRuns", "maxDeviationPct"],
+          "additionalProperties": false,
+          "properties": {
+            "minRuns": { "type": "number", "minimum": 1 },
+            "maxDeviationPct": { "type": "number", "minimum": 0.1 }
+          }
+        },
+        "board": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "scaleMax": { "type": "number", "minimum": 1 },
+            "ticks": { "type": "array", "items": { "type": "number" } },
+            "nearBand": { "type": "number", "minimum": 1 },
+            "cold": {
+              "type": "object",
+              "required": ["last", "peak"],
+              "additionalProperties": false,
+              "properties": {
+                "last": { "type": "number" },
+                "peak": { "type": "number" }
+              }
+            },
+            "phases": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "string", "minLength": 1 } },
+            "total": { "type": "string", "minLength": 1 },
+            "recent": { "type": "string", "minLength": 1 },
+            "aria": { "type": "string", "minLength": 1 },
+            "peakNote": { "type": "string", "minLength": 1 }
+          }
+        },
+        "terms": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": { "type": "string", "minLength": 1 },
+            "curve": { "type": "string", "minLength": 1 },
+            "batch": { "type": "string", "minLength": 1 },
+            "batchCap": { "type": "string", "minLength": 1 },
+            "equipment": { "type": "string", "minLength": 1 },
+            "criticalNote": { "type": "string", "minLength": 1 },
+            "peakLowNote": { "type": "string", "minLength": 1 },
+            "rampNote": { "type": "string", "minLength": 1 },
+            "coolNote": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

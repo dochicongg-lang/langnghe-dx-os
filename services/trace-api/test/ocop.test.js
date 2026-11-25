@@ -136,3 +136,37 @@ test("Flowable client: gọi đúng đường dẫn, gửi biến, báo lỗi r�
   const down = createFlowableClient({ baseUrl: "http://f", user: "u", password: "p", fetchImpl: async () => { throw new Error("ECONNREFUSED"); } });
   await assert.rejects(down.start("x"), /Không gọi được Flowable/);
 });
+
+test("aggregateCouncilScores: tổng hợp điểm trung bình các thành viên Hội đồng và kiểm tra quorum", () => {
+  assert.equal(ocop.aggregateCouncilScores(P, [], 7).quorumMet, false);
+  const res = ocop.aggregateCouncilScores(
+    P,
+    [
+      { scores: { A: 30, B: 20, C: 25 }, total: 75 },
+      { scores: { A: 34, B: 20, C: 27 }, total: 81 },
+    ],
+    2,
+  );
+  assert.equal(res.count, 2);
+  assert.equal(res.quorumMet, true);
+  assert.deepEqual(res.avgParts, { A: 32, B: 20, C: 26 });
+  assert.equal(res.avgTotal, 78);
+  assert.equal(res.suggestedStars, 4);
+});
+
+test("BPMN dxos-ocop-support: có Timer Boundary Events (12D/15D) và Parallel Multi-Instance Hội đồng OCOP", () => {
+  const xml = require("node:fs").readFileSync(path.join(ROOT, "workflows", "dxos-ocop-support.bpmn20.xml"), "utf8");
+  for (const needle of [
+    'process id="dxosOcopSupport"',
+    "boundaryEvent",
+    "timerEventDefinition",
+    "P12D",
+    "P15D",
+    "multiInstanceLoopCharacteristics",
+    'isSequential="false"',
+    "councilScoring",
+    "fDirectOfficial",
+  ]) {
+    assert.ok(xml.includes(needle), `BPMN thiếu thành phần ${needle}`);
+  }
+});

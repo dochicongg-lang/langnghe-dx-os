@@ -24,7 +24,7 @@ interface Proposal {
 
 const statusText = { approved: "Đã duyệt", rejected: "Đã từ chối", pending: "Chờ duyệt" } as const;
 
-/** Đề xuất của hệ thống về các mẻ nung và mẻ nhuộm cần xem lại. Hệ thống chỉ đề xuất; hành động chỉ thực hiện sau khi người có thẩm quyền duyệt. */
+/** Đề xuất cảnh báo theo ngưỡng có kiểm duyệt (Human-in-the-loop Alerting): hệ thống chỉ đề xuất từ bộ luật; thông báo chỉ gửi khi có người duyệt. */
 export default function ProposalsPanel() {
   const { apiFetch, user } = useAuth();
   const allowed = Boolean(user.permissions["application.review"]);
@@ -36,7 +36,7 @@ export default function ProposalsPanel() {
   const load = useCallback(async () => {
     if (!allowed) return;
     try {
-      const res = await apiFetch("/api/trace/agent/proposals");
+      const res = await apiFetch("/api/trace/v1/alerts/proposals");
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `Hệ thống báo lỗi (mã ${res.status})`);
       setItems(body.proposals as Proposal[]);
@@ -55,7 +55,7 @@ export default function ProposalsPanel() {
     setBusy(id);
     setError(null);
     try {
-      const res = await apiFetch(`/api/trace/agent/proposals/${id}/decide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision, note: notes[id] ?? "" }) });
+      const res = await apiFetch(`/api/trace/v1/alerts/proposals/${id}/decide`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision, note: notes[id] ?? "" }) });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `Hệ thống báo lỗi (mã ${res.status})`);
       await load();
@@ -72,7 +72,7 @@ export default function ProposalsPanel() {
   const donePaged = usePaged(done, 5);
   if (!allowed) return null;
   return (
-    <Card title="Đề xuất của hệ thống chờ bạn duyệt">
+    <Card title="Cảnh báo đề xuất chờ kiểm duyệt (Human-in-the-loop)">
       {error && (
         <p className="mt-3 text-sm text-red-600" role="alert">
           {error}

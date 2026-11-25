@@ -128,7 +128,34 @@ function actionsFrom(state) {
   return Object.entries(TRANSITIONS).filter(([, t]) => t.from.includes(state)).map(([a]) => a);
 }
 
+/** Tổng hợp điểm chấm độc lập của Hội đồng OCOP: tính trung bình từng phần, tổng trung bình, đạt quorum và hạng sao gợi ý. */
+function aggregateCouncilScores(profile, scoreRows = [], minQuorum = 7) {
+  const parts = profile.scoring.parts;
+  const count = scoreRows.length;
+  const quorum = Math.max(1, Number(minQuorum) || 1);
+  if (count === 0) {
+    return { count: 0, minQuorum: quorum, quorumMet: false, avgParts: {}, avgTotal: null, suggestedStars: null };
+  }
+  const sums = Object.fromEntries(parts.map((p) => [p.key, 0]));
+  let totalSum = 0;
+  for (const row of scoreRows) {
+    const s = row.scores ?? {};
+    for (const p of parts) sums[p.key] += Number(s[p.key] ?? 0);
+    totalSum += Number(row.total ?? 0);
+  }
+  const avgParts = Object.fromEntries(parts.map((p) => [p.key, Math.round((sums[p.key] / count) * 100) / 100]));
+  const avgTotal = Math.round((totalSum / count) * 100) / 100;
+  return {
+    count,
+    minQuorum: quorum,
+    quorumMet: count >= quorum,
+    avgParts,
+    avgTotal,
+    suggestedStars: starsFor(profile, avgTotal),
+  };
+}
+
 module.exports = {
   STATES, TRANSITIONS, loadProfiles, validateProfiles, getProfile, scoreTotals, starsFor, authorityFor,
-  validUntil, renewalWindow, checklistFor, missingRequired, transition, actionsFrom,
+  validUntil, renewalWindow, checklistFor, missingRequired, transition, actionsFrom, aggregateCouncilScores,
 };

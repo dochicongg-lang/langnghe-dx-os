@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://langnghe-dx-os.local/schemas/sectors.schema.json",
+  "title": "DX-OS Craft Sectors Configuration",
+  "description": "Chuẩn hóa cấu hình ngành nghề làng nghề, chuỗi công đoạn và thiết bị cảm biến mặc định (config/sectors.json).",
+  "type": "object",
+  "required": ["defaultSector", "sectors"],
+  "additionalProperties": false,
+  "properties": {
+    "_doc": { "type": "string" },
+    "defaultSector": { "type": "string", "pattern": "^[a-z0-9-]{2,40}$" },
+    "sectors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["key", "label", "match", "stages"],
+        "additionalProperties": false,
+        "properties": {
+          "key": { "type": "string", "pattern": "^[a-z0-9-]{2,40}$" },
+          "label": { "type": "string", "minLength": 1 },
+          "match": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "intelligence": { "type": ["string", "null"] },
+          "analysis": { "type": "string", "pattern": "^[a-z0-9-]{2,40}$" },
+          "profile": { "type": "string", "pattern": "^[a-z0-9-]{2,60}$" },
+          "devicePrefix": { "type": "string", "pattern": "^[a-z0-9-]{2,40}$" },
+          "defaultDevice": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$" },
+          "sensorStage": { "type": "string", "pattern": "^[a-z0-9-]{2,40}$" },
+          "ocopGroup": { "type": "string", "pattern": "^[a-z0-9-]{2,60}$" },
+          "stages": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": ["key", "label"],
+              "additionalProperties": false,
+              "properties": {
+                "key": { "type": "string", "pattern": "^[a-z0-9-]{2,40}$" },
+                "label": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
