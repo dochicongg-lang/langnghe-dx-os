@@ -284,3 +284,52 @@ test("boardConfigs: tự sinh cấu hình bảng theo dõi từ sectors + kiln-p
   assert.equal(teaBoard.labels.device, "tôn sao");
   assert.equal(teaBoard.ref.peakMin, 130);
 });
+
+test("Heat Work (nhiệt tích lũy °C·giờ): tích phân hình thang chính xác phần diện tích trên ngưỡng", () => {
+  // Giữ 500 °C không đổi suốt 2 giờ trên ngưỡng cơ sở 300 °C -> (500 - 300) * 2 = 400 °C·h
+  assert.equal(kiln.computeHeatWork([[0, 500], [2 * H, 500]], 300), 400);
+  // Tăng tuyến tính từ 200 °C lên 400 °C trong 2 giờ (vượt ngưỡng 300 °C ở đúng 1 giờ giữa): tam giác cao 100 °C * đáy 1h / 2 = 50 °C·h
+  assert.equal(kiln.computeHeatWork([[0, 200], [2 * H, 400]], 300), 50);
+  const r = kiln.analyze(evidence(curve(GOOD)), P);
+  assert.ok(r.metrics.heatWorkCh > 5000, `heatWorkCh=${r.metrics.heatWorkCh}`);
+});
+
+test("DTW (Dynamic Time Warping): khớp hình dạng bất biến co giãn pha nhỏ và phân biệt đường cong khác biệt", () => {
+  const a = ramp(1150, 600);
+  assert.equal(kiln.dtwDistance(a, a), 0);
+  // Lệch pha nhẹ ở sườn lên nhưng cùng đỉnh 1150 -> khoảng cách DTW nhỏ hơn nhiều so với mẻ sai đỉnh 900 °C
+  const shifted = a.map(([t, v], i) => [t, i < 20 ? v * 0.96 : v]);
+  const dShift = kiln.dtwDistance(a, shifted);
+  const dCold = kiln.dtwDistance(a, ramp(900, 600));
+  assert.ok(dShift < 15 && dCold > 70 && dCold > dShift * 10, `dShift=${dShift}, dCold=${dCold}`);
+});
+
+test("Chống gian lận đường cong: bắt Replay (tịnh tiến thời gian mẻ cũ), dữ liệu tổng hợp quá mịn và sai chữ ký Ed25519", () => {
+  const origPts = curve(GOOD);
+  // Kẻ gian lấy nguyên đường cong mẻ cũ rồi cộng thêm 7 ngày vào mọi timestamp
+  const replayedPts = origPts.map(([t, v]) => [t + 7 * 24 * H, v]);
+  const rep = kiln.analyze(evidence(replayedPts), P, {
+    peerCurves: [{ id: 1, productCode: "GOM-BT-0001", curve: origPts }],
+  });
+  assert.equal(rep.verdict, "alert");
+  assert.ok(codes(rep).includes("curve-replay"));
+  assert.match(rep.findings.find((f) => f.code === "curve-replay").text, /GOM-BT-0001/);
+
+  // Dữ liệu có nhiễu thực tế khác hình dạng -> không báo nhầm replay
+  const noisyReal = origPts.map(([t, v], i) => [t, Math.round((v + Math.sin(i * 1.7) * 8 + (i % 3) * 1.5) * 10) / 10]);
+  const cleanCheck = kiln.analyze(evidence(noisyReal), P, {
+    peerCurves: [{ id: 1, productCode: "GOM-BT-0001", curve: origPts }],
+    checkSynthetic: true,
+  });
+  assert.ok(!codes(cleanCheck).includes("curve-replay"));
+  assert.ok(!codes(cleanCheck).includes("synthetic-smooth"));
+
+  // Đường cong phẳng tuyến tính tuyệt đối khi bật checkSynthetic -> cảnh báo synthetic-smooth
+  const synthCheck = kiln.analyze(evidence(origPts), P, { checkSynthetic: true });
+  assert.ok(codes(synthCheck).includes("synthetic-smooth"));
+
+  // Cờ bad-signature từ lớp Ed25519 -> nâng lên alert integrity
+  const badSig = kiln.analyze({ ...evidence(origPts), quality: { flags: ["bad-signature"] } }, P);
+  assert.equal(badSig.verdict, "alert");
+  assert.ok(codes(badSig).includes("integrity"));
+});

@@ -15,13 +15,20 @@ function createAlertRoutes(ctx) {
        WHERE e.iot IS NOT NULL ORDER BY e.id`,
     );
     const peaksByDevice = new Map();
-    for (const r of rows) peaksByDevice.set(r.iot.deviceId, [...(peaksByDevice.get(r.iot.deviceId) ?? []), { id: r.id, peak: r.iot.max }]);
+    const curvesByDevice = new Map();
+    for (const r of rows) {
+      peaksByDevice.set(r.iot.deviceId, [...(peaksByDevice.get(r.iot.deviceId) ?? []), { id: r.id, peak: r.iot.max }]);
+      curvesByDevice.set(r.iot.deviceId, [...(curvesByDevice.get(r.iot.deviceId) ?? []), { id: r.id, productCode: r.code, curve: r.iot.curve }]);
+    }
     let created = 0;
     let scanned = 0;
     for (const r of rows) {
       if (onlyEventId !== null && r.id !== onlyEventId) continue;
       scanned++;
-      const insight = kiln.analyze(r.iot, kiln.pickProfile(KILN, r.category), { baselinePeaks: peaksByDevice.get(r.iot.deviceId).filter((x) => x.id !== r.id).map((x) => x.peak) });
+      const insight = kiln.analyze(r.iot, kiln.pickProfile(KILN, r.category), {
+        baselinePeaks: peaksByDevice.get(r.iot.deviceId).filter((x) => x.id !== r.id).map((x) => x.peak),
+        peerCurves: curvesByDevice.get(r.iot.deviceId).filter((x) => x.id < r.id),
+      });
       const p = alerting.proposeFromKiln({ product: { code: r.code, name: r.name, coop: r.coop }, eventId: r.id, insight });
       if (!p) continue;
       const ins = await pool.query(

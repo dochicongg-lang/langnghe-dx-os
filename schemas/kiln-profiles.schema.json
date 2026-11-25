@@ -97,6 +97,14 @@
             "maxDeviationPct": { "type": "number", "minimum": 0.1 }
           }
         },
+        "heatWork": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "minCh": { "type": "number", "minimum": 1 },
+            "maxCh": { "type": "number", "minimum": 1 }
+          }
+        },
         "board": {
           "type": "object",
           "additionalProperties": false,

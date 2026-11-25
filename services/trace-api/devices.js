@@ -17,6 +17,7 @@ const fs = require("node:fs");
 const DEVICE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
 const GATEWAY_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
 const COOP_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
+const PUBKEY_RE = /^[0-9a-fA-F]{64}$/;
 
 /** Phân tích nội dung JSON thành Map(deviceId -> { gateway, coop?, min?, max?, maxRatePerSec? }). Ném lỗi nếu sai định dạng. */
 function parseDevices(text) {
@@ -51,6 +52,14 @@ function parseDevices(text) {
     if (maxRatePerSec !== undefined && maxRatePerSec <= 0) throw new Error(`maxRatePerSec phải > 0 (thiết bị ${id})`);
     const rec = { gateway: o.gateway, min, max, maxRatePerSec };
     if (coop !== undefined) rec.coop = coop;
+    if (o.publicKey !== undefined) {
+      if (typeof o.publicKey !== "string" || !PUBKEY_RE.test(o.publicKey)) throw new Error(`publicKey Ed25519 của thiết bị ${id} phải là hex 64 ký tự`);
+      rec.publicKey = o.publicKey.toLowerCase();
+    }
+    if (o.requireSignature !== undefined) {
+      if (typeof o.requireSignature !== "boolean") throw new Error(`requireSignature của thiết bị ${id} phải là boolean`);
+      rec.requireSignature = o.requireSignature;
+    }
     map.set(id, rec);
   }
   return map;

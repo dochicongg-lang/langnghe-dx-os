@@ -10,8 +10,8 @@ const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9-]{2,39}$/;
 function createOcopRoutes(ctx) {
   const { getPool, access, ACCESS, requirePermission, ocop, OCOP, flowable, docsS3, attachments, scanner, scanRequired, pdf } = ctx;
 
-  const APP_COLS = `a.id, a.code, a.profile, a.product_code, a.product_name, a.product_group, a.description, a.owner_username AS owner,
-    c.code AS coop, a.state, a.self_score, a.documents, a.flowable_instance, a.created_at, a.updated_at`;
+  const APP_COLS = `a.id, a.code, a.receipt_code, a.profile, a.product_code, a.product_name, a.product_group, a.description, a.owner_username AS owner,
+    c.code AS coop, c.name AS coop_name, a.state, a.self_score, a.documents, a.flowable_instance, a.created_at, a.updated_at`;
 
   const appResource = (a) => ({ owner: a.owner, coop: a.coop });
   const attachmentView = (r) => ({ id: r.id, doc_key: r.doc_key, filename: r.filename, content_type: r.content_type, size: r.size, sha256: r.sha256, uploaded_by: r.uploaded_by, created_at: r.created_at });
@@ -148,13 +148,14 @@ function createOcopRoutes(ctx) {
       coopId = c.rows[0].id;
     }
     const code = `OCOP-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const receiptCode = `BN-${code.slice(5)}`;
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       const { rows } = await client.query(
-        `INSERT INTO ocop_applications (code, profile, product_code, product_name, product_group, description, owner_username, coop_id, self_score, documents)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-        [code, profile.id, f.product_code ?? null, f.product_name, f.product_group, f.description ?? "", user.name, coopId, f.self_score ?? null, JSON.stringify(f.documents ?? [])],
+        `INSERT INTO ocop_applications (code, receipt_code, profile, product_code, product_name, product_group, description, owner_username, coop_id, self_score, documents)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+        [code, receiptCode, profile.id, f.product_code ?? null, f.product_name, f.product_group, f.description ?? "", user.name, coopId, f.self_score ?? null, JSON.stringify(f.documents ?? [])],
       );
       await client.query("INSERT INTO ocop_application_history (application_id, action, from_state, to_state, actor, note) VALUES ($1,'create',NULL,'draft',$2,'')", [rows[0].id, user.name]);
       await client.query("COMMIT");
@@ -432,7 +433,48 @@ function createOcopRoutes(ctx) {
     });
   }
 
+  /** Tra cứu công khai tiến độ xử lý hồ sơ OCOP bằng mã biên nhận (`BN-...`) hoặc mã hồ sơ (`OCOP-...`); ẩn hoàn toàn dữ liệu cá nhân/nội bộ. */
+  async function publicApplicationLookup(rawKey) {
+    const key = str(rawKey, 60, "code", true);
+    const pool = getPool();
+    const { rows } = await pool.query(
+      `SELECT a.id, a.code, a.receipt_code, a.profile, a.product_name, a.product_group, a.state, a.created_at, a.updated_at, c.name AS coop_name
+       FROM ocop_applications a LEFT JOIN cooperatives c ON c.id = a.coop_id
+       WHERE lower(a.receipt_code) = lower($1) OR lower(a.code) = lower($1) LIMIT 1`,
+      [key],
+    );
+    const a = rows[0];
+    if (!a) throw new HttpError(404, "Không tìm thấy hồ sơ khớp với mã biên nhận hoặc mã hồ sơ này");
+    const profile = ocop.getProfile(OCOP, a.profile);
+    const groupLabel = profile.groups.find((g) => g.key === a.product_group)?.label ?? a.product_group;
+    const hist = await pool.query(
+      "SELECT action, from_state, to_state, created_at FROM ocop_application_history WHERE application_id = $1 AND action <> 'archive' ORDER BY id",
+      [a.id],
+    );
+    const resRows = await pool.query(
+      "SELECT stars, authority, decision_no, decided_at::text AS decided_at, valid_until::text AS valid_until, recognized FROM ocop_results WHERE application_id = $1 ORDER BY id DESC LIMIT 1",
+      [a.id],
+    );
+    return {
+      code: a.code,
+      receipt_code: a.receipt_code ?? `BN-${a.code.slice(5)}`,
+      product_name: a.product_name,
+      product_group: a.product_group,
+      product_group_label: groupLabel,
+      coop_name: a.coop_name ?? "Chưa gắn hợp tác xã",
+      state: a.state,
+      created_at: a.created_at,
+      updated_at: a.updated_at,
+      steps: hist.rows,
+      official_result: resRows.rows[0] ?? null,
+    };
+  }
+
   return async function handleOcop(req, res, parts, url, m) {
+    if (parts[0] === "public" && parts[1] === "applications" && parts[2] === "lookup" && parts.length === 4 && m === "GET") {
+      send(res, 200, await publicApplicationLookup(parts[3]));
+      return true;
+    }
     if (parts[0] !== "applications") return false;
     const user = getUser(req);
     if (!access.canApi(ACCESS, user.roles)) throw new HttpError(403, "Vai trò của bạn không dùng được API này");

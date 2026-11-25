@@ -11,6 +11,7 @@
  */
 
 const crypto = require("node:crypto");
+const { verifyReading } = require("./iot-signing");
 
 const METRIC = "temperature";
 const MAX_WINDOW_MS = 72 * 3600 * 1000; // tối đa 72 giờ cho một lần nung
@@ -74,7 +75,18 @@ function selectKeys(keys, from, to) {
 
 /** Đọc các dòng NDJSON, giữ mẫu của đúng thiết bị/chỉ số trong khoảng. Bỏ qua dòng lỗi. */
 function collectPoints(bodies, deviceId, from, to) {
+  return collectVerifiedPoints(bodies, deviceId, from, to).pts;
+}
+
+/** Đọc các dòng NDJSON kèm kiểm tra chữ ký số Ed25519 từ thiết bị biên (nếu thiết bị đăng ký publicKey). */
+function collectVerifiedPoints(bodies, deviceId, from, to, sigOpts = {}) {
   const pts = [];
+  let signedSamples = 0;
+  let badSignatures = 0;
+  let unsignedRejected = 0;
+  const pubKey = sigOpts?.publicKey ?? null;
+  const reqSig = sigOpts?.requireSignature === true;
+
   for (const body of bodies) {
     for (const line of body.split("\n")) {
       if (!line.trim()) continue;
@@ -86,11 +98,22 @@ function collectPoints(bodies, deviceId, from, to) {
       }
       const t = Date.parse(r?.timestamp);
       if (r?.deviceId === deviceId && r?.metric === METRIC && Number.isFinite(r.value) && t >= from && t <= to) {
+        if (pubKey && r.sig) {
+          if (!verifyReading(r, pubKey, r.sig)) {
+            badSignatures++;
+            continue;
+          }
+          signedSamples++;
+        } else if (reqSig) {
+          unsignedRejected++;
+          continue;
+        }
         pts.push({ t, v: r.value, name: typeof r.deviceName === "string" ? r.deviceName : "", unit: typeof r.unit === "string" ? r.unit : "" });
       }
     }
   }
-  return pts.sort((a, b) => a.t - b.t);
+  pts.sort((a, b) => a.t - b.t);
+  return { pts, signedSamples, badSignatures, unsignedRejected };
 }
 
 const round1 = (x) => Math.round(x * 10) / 10;
@@ -333,14 +356,25 @@ async function buildEvidence(win, s3, gateway, limits = {}) {
       )),
     );
   }
-  const pts = collectPoints(bodies, win.deviceId, win.from, win.to);
+  const { pts, signedSamples, badSignatures, unsignedRejected } = collectVerifiedPoints(bodies, win.deviceId, win.from, win.to, limits);
   const { accepted, quality } = assess(pts, win.from, win.to, limits);
   quality.overwritten = overwritten;
   quality.deleted = deleted;
+  if (signedSamples > 0 || limits?.publicKey) quality.signedSamples = signedSamples;
+  if (badSignatures > 0) {
+    quality.badSignatures = badSignatures;
+    quality.flags.push("bad-signature");
+  }
+  if (unsignedRejected > 0) {
+    quality.unsignedRejected = unsignedRejected;
+    quality.flags.push("unsigned-sample");
+  }
   if (overwritten) quality.flags.push("object-overwritten");
   if (deleted) quality.flags.push("object-deleted");
   const evidence = summarize(accepted, win.deviceId, win.from, win.to);
   if (!evidence) {
+    if (badSignatures > 0) throw new IotError(422, `Toàn bộ mẫu đo có chữ ký Ed25519 không hợp lệ (${badSignatures} mẫu bị từ chối)`);
+    if (unsignedRejected > 0) throw new IotError(422, `Thiết bị bắt buộc chữ ký số Ed25519 nhưng mẫu đo thiếu chữ ký (${unsignedRejected} mẫu)`);
     if (pts.length) throw new IotError(422, `Toàn bộ ${pts.length} mẫu nằm ngoài khoảng giá trị hợp lý của thiết bị, không dùng được làm bằng chứng`);
     throw new IotError(422, "Không có số liệu cảm biến của thiết bị này trong khoảng thời gian đã nhập");
   }
@@ -445,4 +479,4 @@ async function readLatestReadings(s3, allowedDevices, opts = {}) {
   return { readings, objects };
 }
 
-module.exports = { IotError, parseWindow, keyTime, folderOf, dayPrefixes, selectKeys, collectPoints, assess, summarize, createS3Client, buildEvidence, readLatestReadings };
+module.exports = { IotError, parseWindow, keyTime, folderOf, dayPrefixes, selectKeys, collectPoints, collectVerifiedPoints, assess, summarize, createS3Client, buildEvidence, readLatestReadings };

@@ -24,7 +24,10 @@ export interface IotQuality {
   jumps: number; // số lần giá trị đổi nhanh bất thường
   overwritten?: number; // số tệp bị ghi đè sau khi ghi (hệ thống dùng bản ghi đầu tiên)
   deleted?: number; // số tệp bị yêu cầu xóa (bản gốc vẫn được giữ)
-  flags: string[]; // low-coverage | out-of-range | rapid-change | few-samples | object-overwritten | object-deleted
+  signedSamples?: number; // số mẫu đã xác thực chữ ký số Ed25519 tại biên
+  badSignatures?: number; // số mẫu bị loại do sai chữ ký số Ed25519
+  unsignedRejected?: number; // số mẫu bị loại do thiếu chữ ký số bắt buộc
+  flags: string[]; // low-coverage | out-of-range | rapid-change | few-samples | object-overwritten | object-deleted | bad-signature | unsigned-sample
 }
 
 /** Bằng chứng IoT gắn vào công đoạn nung: tóm tắt số liệu cảm biến lò trong khoảng thời gian nung. */
@@ -51,7 +54,7 @@ export interface KilnInsight {
   verdict: KilnVerdict;
   summary: string;
   findings: { code: string; level: "alert" | "warn" | "info" | "ok"; text: string }[];
-  metrics: { peak: number | null; samples: number; durationMin?: number; holdMin?: number; maxRampPerHour?: number | null; maxCoolPerHour?: number | null };
+  metrics: { peak: number | null; samples: number; durationMin?: number; holdMin?: number; heatWorkCh?: number; maxRampPerHour?: number | null; maxCoolPerHour?: number | null };
   baseline: { runs: number; medianPeak: number; deviationPct: number } | null;
   profile: { id: string; name: string; verified: boolean; terms?: Record<string, string> };
 }
@@ -60,7 +63,7 @@ export interface ReferenceCurve {
   n: number; // số mẻ đạt khác dùng để dựng đường chuẩn
   enough: boolean; // đủ mẻ (>= 3) mới có đường chuẩn
   points: [number, number, number, number][]; // [tỉ lệ thời gian, trung vị, phân vị 25, phân vị 75]
-  note: { level: "ok" | "warn"; text: string } | null;
+  note: { level: "ok" | "warn"; dtwC?: number | null; text: string } | null;
 }
 
 export interface TraceEvent {
@@ -96,6 +99,8 @@ export interface PublicOcop {
 
 export interface ProductDetail {
   code: string;
+  gtin?: string;
+  gs1?: { gtin: string; digital_link: string; epcis_url: string };
   name: string;
   category: string;
   sector?: string;

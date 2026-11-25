@@ -73,6 +73,43 @@ paths:
       responses:
         "200":
           description: Cấu hình ngành nghề công khai
+  /public/directory:
+    get:
+      tags: [Traceability]
+      summary: Danh bạ sản phẩm làng nghề công khai (lọc theo từ khóa, ngành nghề, địa phương, hạng sao OCOP)
+      security: []
+      parameters:
+        - name: q
+          in: query
+          schema: { type: string }
+        - name: sector
+          in: query
+          schema: { type: string }
+        - name: village
+          in: query
+          schema: { type: string }
+        - name: stars
+          in: query
+          schema: { type: integer, minimum: 3, maximum: 5 }
+      responses:
+        "200":
+          description: Danh sách sản phẩm công khai đã lọc
+  /public/01/{gtin}:
+    get:
+      tags: [Traceability]
+      summary: Giải mã đường dẫn chuẩn TCVN 13274:2020 / GS1 Digital Link (/01/<GTIN>[/10/<Batch>][/21/<Serial>])
+      security: []
+      parameters:
+        - name: gtin
+          in: path
+          required: true
+          schema: { type: string }
+        - name: format
+          in: query
+          schema: { type: string, enum: [epcis] }
+      responses:
+        "200":
+          description: Chi tiết sản phẩm hoặc tài liệu EPCIS 2.0 JSON-LD
   /public/{code}:
     get:
       tags: [Traceability]
@@ -89,6 +126,32 @@ paths:
           description: Chi tiết sản phẩm công khai
         "404":
           description: Không tìm thấy sản phẩm
+  /public/{code}/epcis:
+    get:
+      tags: [Traceability]
+      summary: Xuất chuỗi sự kiện chuẩn GS1 EPCIS 2.0 JSON-LD ("một bước trước – một bước sau")
+      security: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Tài liệu EPCIS 2.0 JSON-LD
+  /public/applications/lookup/{receiptOrCode}:
+    get:
+      tags: [OCOP]
+      summary: Tra cứu công khai tiến độ hồ sơ OCOP bằng mã biên nhận (BN-...) hoặc mã hồ sơ
+      security: []
+      parameters:
+        - name: receiptOrCode
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Tiến độ xử lý công khai của hồ sơ OCOP
   /products:
     get:
       tags: [Traceability]

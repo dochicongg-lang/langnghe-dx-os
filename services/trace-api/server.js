@@ -30,6 +30,7 @@ const lake = require("./lake");
 const assistant = require("./assistant");
 const alerting = require("./alerting");
 const pdf = require("./pdf");
+const gs1 = require("./gs1");
 const { createFlowableClient } = require("./flowable");
 const { HttpError, send, makeAuthHelpers } = require("./http-util");
 
@@ -284,7 +285,7 @@ const { handleAudit, runArchive } = createAuditRoutes({
 const routers = [
   createConfigRoutes({ access, ACCESS, SECTORS, sectors, assistant, ASSISTANT }),
   createIotRoutes({ access, ACCESS, devices, devicesForUser, SECTORS, KILN, kiln, s3, readLatestReadings, iotDayCache }),
-  createProductRoutes({ getPool, access, ACCESS, requirePermission, sectors, SECTORS, kiln, KILN, ocop, OCOP, overview, devices, s3, IotError, parseWindow, buildEvidence, getScanAlerts: () => scanAlerts }),
+  createProductRoutes({ getPool, access, ACCESS, requirePermission, sectors, SECTORS, kiln, KILN, ocop, OCOP, overview, devices, s3, IotError, parseWindow, buildEvidence, gs1, getScanAlerts: () => scanAlerts }),
   createOcopRoutes({ getPool, access, ACCESS, requirePermission, ocop, OCOP, flowable, docsS3, attachments, scanner, scanRequired: SCAN_REQUIRED, pdf }),
   handleAlerts,
   createLakeRoutes({ getPool, access, ACCESS, requirePermission, lake, getLakeS3: () => lakeS3, runLakeExport }),

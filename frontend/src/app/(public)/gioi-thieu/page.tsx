@@ -56,9 +56,17 @@ export default function IntroPage() {
             <Logo className="h-11 w-auto" />
           </Link>
           <IntroNav />
-          <Link href="/vao" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-            Đăng nhập
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/danh-ba" className="hidden rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 sm:inline-block">
+              Danh bạ sản phẩm
+            </Link>
+            <Link href="/tra-cuu-ho-so" className="hidden rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50 lg:inline-block">
+              Tra cứu hồ sơ
+            </Link>
+            <Link href="/vao" className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+              Đăng nhập
+            </Link>
+          </div>
         </div>
       </header>
 

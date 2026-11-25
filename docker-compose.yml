@@ -278,6 +278,45 @@ services:
     networks:
       - dxos-net
 
+  # ---- Tầng biên IoT: Broker MQTT (Eclipse Mosquitto) & Cầu nối kiểm chữ ký số Ed25519 ----
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: dxos-mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports:
+      - "127.0.0.1:${MQTT_PORT:-1883}:1883"
+    networks:
+      - dxos-net
+
+  iot-mqtt-bridge:
+    build:
+      context: .
+      dockerfile: services/iot-mqtt-bridge/Dockerfile
+    image: dxos/iot-mqtt-bridge:local
+    container_name: dxos-iot-mqtt-bridge
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      IOT_DEVICES_FILE: /app/config/iot-devices.json
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_IOT_CLIENT_ID: ${KEYCLOAK_IOT_CLIENT_ID}
+      KEYCLOAK_IOT_CLIENT_SECRET: ${KEYCLOAK_IOT_CLIENT_SECRET}
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: ${IOT_BUCKET:-dxos-iot}
+    volumes:
+      - ./config/iot-devices.json:/app/config/iot-devices.json:ro
+    depends_on:
+      mosquitto:
+        condition: service_started
+      minio:
+        condition: service_healthy
+    networks:
+      - dxos-net
+
   # ---- Tầng 2 (Giao diện Next.js) ----
   frontend:
     build: ./frontend

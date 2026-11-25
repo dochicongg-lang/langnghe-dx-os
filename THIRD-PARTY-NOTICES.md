@@ -15,6 +15,7 @@ trong kho mã**: các thư viện được cài qua trình quản lý gói (`npm
 | PostgreSQL | `postgres:16` | PostgreSQL License (kiểu BSD/MIT) | Dữ liệu có cấu trúc |
 | MinIO | `pgsty/minio` (ghim theo mã băm trong `docker-compose.yml`) | **AGPL-3.0** | Lưu trữ đối tượng (tệp, số liệu cảm biến, kho lạnh) |
 | ClamAV | `clamav/clamav:1.4` (ghim theo mã băm trong `docker-compose.yml`) | **GPL-2.0** | Quét mã độc tệp đính kèm tải lên (`clamd`) |
+| Eclipse Mosquitto | `eclipse-mosquitto:2` | EPL-2.0 / EDL-1.0 (BSD-3-Clause) | Broker MQTT thu nhận dữ liệu cảm biến biên (ESP32) |
 | Caddy | `caddy:2-alpine` | Apache-2.0 | Reverse proxy HTTPS tự động (profile `prod`) |
 
 **Về MinIO (AGPL-3.0):** dự án chỉ chạy MinIO như một dịch vụ riêng, dùng ảnh Docker nguyên bản và giao tiếp qua giao thức S3 chuẩn.
