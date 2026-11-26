@@ -23,6 +23,9 @@ services:
     image: postgres:16
     container_name: dxos-postgres
     restart: unless-stopped
+    # Cấu hình bộ nhớ gọn cho quy mô demo/vừa
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "work_mem=4MB", "-c", "max_connections=50"]
+    mem_limit: 256m
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -45,6 +48,7 @@ services:
     container_name: dxos-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
+    mem_limit: 384m
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -76,12 +80,15 @@ services:
       - dxos-net
 
   # ---- Quét mã độc tệp tải lên (ClamAV) ----
+  # Chỉ chạy ở chế độ đầy đủ: docker compose --profile full up -d  (đặt CLAMAV_REQUIRED=true để bắt buộc quét).
   # Không publish cổng ra host: chỉ trace-api gọi tới clamd (3310) trong mạng nội bộ. Lần đầu khởi động cần vài phút để nạp/cập nhật
-  # cơ sở dữ liệu mẫu virus (cần Internet để cập nhật), và dùng khoảng 1–2 GB RAM; trong lúc chưa sẵn sàng, tải tệp lên bị từ chối có thông báo.
+  # cơ sở dữ liệu mẫu virus (cần Internet để cập nhật), và dùng khoảng 1–2 GB RAM. Chế độ mặc định (không có ClamAV): trace-api vẫn nhận
+  # tệp và ghi avStatus "skipped-lite-profile" khi CLAMAV_REQUIRED=false; CLAMAV_REQUIRED=true thì từ chối tải lên khi không quét được.
   clamav:
     image: clamav/clamav:1.4@sha256:cbc30de94b6e9b33ac14136ff45306cee02a1f9ae522394a3cc5b9215d1affe9 # = clamav/clamav:1.4 ngày 2026-11-14
     container_name: dxos-clamav
     restart: unless-stopped
+    profiles: ["full"]
     volumes:
       - clamav-db:/var/lib/clamav
       # chữ ký thử riêng của dự án (chỉ khớp một chuỗi đánh dấu) để kiểm tra việc quét hoạt động thật: xem scripts/check-malware-scan.js
@@ -101,7 +108,9 @@ services:
     container_name: dxos-keycloak
     restart: unless-stopped
     command: start-dev --import-realm
+    mem_limit: 512m
     environment:
+      JAVA_OPTS_APPEND: "-Xms128m -Xmx384m -XX:+UseSerialGC"
       # Issuer của token luôn là KC_HOSTNAME dù APISIX gọi qua http://keycloak:8080 (backchannel động)
       # Mặc định trang đăng nhập nằm CÙNG gốc với giao diện (cổng 3000): Next chuyển tiếp /realms/<realm>/* và /resources/* sang Keycloak (xem frontend/next.config.ts),
       # nên người dùng không thấy địa chỉ đổi sang cổng 8080. Muốn như cũ (Keycloak ở cổng riêng): đặt KC_HOSTNAME_URL=http://localhost:8080 trong .env.
@@ -150,7 +159,15 @@ services:
     image: flowable/flowable-rest:7.0.1
     container_name: dxos-flowable
     restart: unless-stopped
+    mem_limit: 512m
     environment:
+      # Chỉ dùng BPMN + REST: tắt 5 engine không dùng tới để giảm RAM và rút ngắn thời gian khởi động
+      FLOWABLE_CMMN_ENABLED: "false"
+      FLOWABLE_DMN_ENABLED: "false"
+      FLOWABLE_FORM_ENABLED: "false"
+      FLOWABLE_CONTENT_ENABLED: "false"
+      FLOWABLE_APP_ENABLED: "false"
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx320m -XX:+UseSerialGC"
       SPRING_DATASOURCE_DRIVER-CLASS-NAME: org.postgresql.Driver
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${FLOWABLE_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
@@ -168,6 +185,7 @@ services:
     image: quay.io/coreos/etcd:v3.5.14
     container_name: dxos-etcd
     restart: unless-stopped
+    mem_limit: 192m
     command:
       - etcd
       - --name=etcd0
@@ -188,6 +206,7 @@ services:
     image: apache/apisix:3.9.0-debian
     container_name: dxos-apisix
     restart: unless-stopped
+    mem_limit: 256m
     environment:
       APISIX_ADMIN_KEY: ${APISIX_ADMIN_KEY}
       APISIX_VIEWER_KEY: ${APISIX_VIEWER_KEY}
@@ -213,6 +232,7 @@ services:
     image: dxos/trace-api:local
     container_name: dxos-trace-api
     restart: unless-stopped
+    mem_limit: 256m
     environment:
       PG_HOST: postgres
       PG_USER: ${POSTGRES_USER}
@@ -246,7 +266,7 @@ services:
       CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
       NOTIFY_INTERVAL_MINUTES: ${NOTIFY_INTERVAL_MINUTES:-60}
       LAKE_INTERVAL_HOURS: ${LAKE_INTERVAL_HOURS:-24}
-      CLAMAV_REQUIRED: ${CLAMAV_REQUIRED:-true}
+      CLAMAV_REQUIRED: "${CLAMAV_REQUIRED:-false}"
       ANCHOR_BUCKET: ${ANCHOR_BUCKET:-dxos-audit}
       ANCHOR_INTERVAL_MINUTES: ${ANCHOR_INTERVAL_MINUTES:-60}
       ANCHOR_S3_ACCESS_KEY: ${ANCHOR_S3_USER}
@@ -279,10 +299,12 @@ services:
       - dxos-net
 
   # ---- Tầng biên IoT: Broker MQTT (Eclipse Mosquitto) & Cầu nối kiểm chữ ký số Ed25519 ----
+  # Chỉ chạy khi bật profile: docker compose --profile iot up -d  (hoặc --profile full)
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: dxos-mosquitto
     restart: unless-stopped
+    profiles: ["iot", "full"]
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     ports:
@@ -297,6 +319,7 @@ services:
     image: dxos/iot-mqtt-bridge:local
     container_name: dxos-iot-mqtt-bridge
     restart: unless-stopped
+    profiles: ["iot", "full"]
     environment:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
@@ -323,6 +346,7 @@ services:
     image: dxos/frontend:local
     container_name: dxos-frontend
     restart: unless-stopped
+    mem_limit: 384m
     environment:
       PUBLIC_API_PROXY_TARGET: http://apisix:9080
       KEYCLOAK_PROXY_TARGET: http://keycloak:8080
@@ -346,12 +370,12 @@ services:
     networks:
       - dxos-net
 
-  # ---- Reverse Proxy HTTPS tự động (chỉ bật khi chạy profile prod) ----
+  # ---- Reverse Proxy HTTPS tự động (chỉ bật khi chạy profile prod hoặc full) ----
   caddy:
     image: caddy:2-alpine
     container_name: dxos-caddy
     restart: unless-stopped
-    profiles: ["prod"]
+    profiles: ["prod", "full"]
     environment:
       CADDY_DOMAIN: ${CADDY_DOMAIN:-localhost}
     ports:

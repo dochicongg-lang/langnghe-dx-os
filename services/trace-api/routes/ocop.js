@@ -2,6 +2,7 @@
 // Copyright 2026 The Làng Nghề Số contributors
 "use strict";
 const crypto = require("node:crypto");
+const scan = require("../scan");
 const { HttpError, send, sendBinary, readJson, readBuffer, getUser, str } = require("../http-util");
 
 const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9-]{2,39}$/;
@@ -14,7 +15,17 @@ function createOcopRoutes(ctx) {
     c.code AS coop, c.name AS coop_name, a.state, a.self_score, a.documents, a.flowable_instance, a.created_at, a.updated_at`;
 
   const appResource = (a) => ({ owner: a.owner, coop: a.coop });
-  const attachmentView = (r) => ({ id: r.id, doc_key: r.doc_key, filename: r.filename, content_type: r.content_type, size: r.size, sha256: r.sha256, uploaded_by: r.uploaded_by, created_at: r.created_at });
+  const attachmentView = (r) => ({
+    id: r.id,
+    doc_key: r.doc_key,
+    filename: r.filename,
+    content_type: r.content_type,
+    size: r.size,
+    sha256: r.sha256,
+    uploaded_by: r.uploaded_by,
+    created_at: r.created_at,
+    avStatus: r.scan_engine === "clamav" ? "clean" : (r.scan_engine ?? "not-scanned"),
+  });
 
   async function findApplicationRow(code, db = getPool(), lock = false) {
     const { rows } = await db.query(
@@ -64,7 +75,7 @@ function createOcopRoutes(ctx) {
       [a.id],
     );
     const attRows = await pool.query(
-      "SELECT id, doc_key, filename, content_type, size, sha256, uploaded_by, created_at FROM application_attachments WHERE application_id = $1 AND removed_at IS NULL ORDER BY id",
+      "SELECT id, doc_key, filename, content_type, size, sha256, uploaded_by, created_at, scan_engine FROM application_attachments WHERE application_id = $1 AND removed_at IS NULL ORDER BY id",
       [a.id],
     );
     let expected = null;
@@ -351,18 +362,11 @@ function createOcopRoutes(ctx) {
     }
     const dup = await pool.query("SELECT 1 FROM application_attachments WHERE application_id = $1 AND doc_key = $2 AND sha256 = $3 AND removed_at IS NULL", [a.id, docKey, info.sha256]);
     if (dup.rowCount) throw new HttpError(409, "Tệp này đã được đính kèm cho giấy tờ này");
-    let scanEngine = null;
-    if (scanner) {
-      try {
-        const r = await scanner.scan(buf);
-        if (!r.clean) throw new HttpError(422, `Tệp bị chặn vì nghi chứa mã độc (${r.signature})`);
-        scanEngine = "clamav";
-      } catch (e) {
-        if (e instanceof HttpError) throw e;
-        console.error("[trace-api] không quét được tệp bằng ClamAV:", e.message);
-        if (scanRequired) throw new HttpError(503, "Dịch vụ quét mã độc chưa sẵn sàng, vui lòng thử lại sau ít phút");
-      }
-    }
+    const av = await scan.evaluateScan({ scanner, buf, required: scanRequired });
+    if (av.cause) console.error("[trace-api] không quét được tệp bằng ClamAV:", av.cause);
+    if (av.blocked) throw new HttpError(av.status, av.message);
+    const scanEngine = av.engine;
+    const avStatus = av.avStatus;
     const key = attachments.objectKey(a.code, docKey, info.sha256, info.name);
     try {
       await docsS3.putObject(key, buf, info.type);
@@ -375,14 +379,19 @@ function createOcopRoutes(ctx) {
       await client.query("BEGIN");
       const { rows } = await client.query(
         `INSERT INTO application_attachments (application_id, doc_key, filename, content_type, size, sha256, object_key, uploaded_by, scan_engine, scanned_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CASE WHEN $9::text IS NULL THEN NULL ELSE now() END) RETURNING id, doc_key, filename, content_type, size, sha256, uploaded_by, created_at`,
-        [a.id, docKey, info.name, info.type, info.size, info.sha256, key, user.name, scanEngine],
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, CASE WHEN $9::text = 'clamav' THEN now() ELSE NULL END) RETURNING id, doc_key, filename, content_type, size, sha256, uploaded_by, created_at, scan_engine`,
+        [a.id, docKey, info.name, info.type, info.size, info.sha256, key, user.name, scanEngine ?? avStatus],
       );
       await client.query(
         "UPDATE ocop_applications SET documents = CASE WHEN documents @> to_jsonb($1::text) THEN documents ELSE documents || to_jsonb($1::text) END, updated_at = now() WHERE id = $2",
         [docKey, a.id],
       );
-      await client.query("INSERT INTO ocop_application_history (application_id, action, from_state, to_state, actor, note) VALUES ($1,'attach',$2,$2,$3,$4)", [a.id, a.state, user.name, `${docKey}: ${info.name}`]);
+      await client.query("INSERT INTO ocop_application_history (application_id, action, from_state, to_state, actor, note) VALUES ($1,'attach',$2,$2,$3,$4)", [
+        a.id,
+        a.state,
+        user.name,
+        `${docKey}: ${info.name}${avStatus === "clean" ? "" : ` [avStatus: ${avStatus}]`}`,
+      ]);
       await client.query("COMMIT");
       return attachmentView(rows[0]);
     } catch (e) {

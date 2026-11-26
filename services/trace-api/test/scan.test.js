@@ -4,7 +4,33 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const net = require("node:net");
-const { ScanError, parseReply, frame, createScanner } = require("../scan");
+const { ScanError, parseReply, frame, createScanner, evaluateScan } = require("../scan");
+
+test("chính sách quét: lite (không bắt buộc) cho qua kèm avStatus skipped-lite-profile; bắt buộc thì chặn 503; mã độc luôn chặn 422", async () => {
+  const ok = { scan: async () => ({ clean: true }) };
+  const evil = { scan: async () => ({ clean: false, signature: "Fake.Virus-1" }) };
+  const down = { scan: async () => { throw new ScanError("Không kết nối được ClamAV: ENOTFOUND clamav"); } };
+  const buf = Buffer.from("x");
+
+  assert.deepEqual(await evaluateScan({ scanner: ok, buf, required: true }), { blocked: false, avStatus: "clean", engine: "clamav" });
+  assert.deepEqual(await evaluateScan({ scanner: ok, buf, required: false }), { blocked: false, avStatus: "clean", engine: "clamav" });
+  for (const required of [true, false]) {
+    const r = await evaluateScan({ scanner: evil, buf, required });
+    assert.equal(r.blocked, true);
+    assert.equal(r.status, 422);
+  }
+  // chế độ lite: ClamAV không chạy -> vẫn nhận tệp, ghi nhận bỏ qua quét
+  const lite = await evaluateScan({ scanner: down, buf, required: false });
+  assert.equal(lite.blocked, false);
+  assert.equal(lite.avStatus, "skipped-lite-profile");
+  assert.equal(lite.engine, null);
+  // chế độ nghiêm ngặt: ClamAV không chạy -> chặn 503 như cũ
+  const strict = await evaluateScan({ scanner: down, buf, required: true });
+  assert.deepEqual([strict.blocked, strict.status], [true, 503]);
+  // chưa cấu hình ClamAV hoàn toàn
+  assert.equal((await evaluateScan({ scanner: null, buf, required: false })).avStatus, "skipped-lite-profile");
+  assert.equal((await evaluateScan({ scanner: null, buf, required: true })).status, 503);
+});
 
 /** clamd giả: đọc đúng giao thức INSTREAM, trả "FOUND" nếu nội dung chứa "EVIL", "OK" nếu không. */
 function fakeClamd(behavior = "normal") {
