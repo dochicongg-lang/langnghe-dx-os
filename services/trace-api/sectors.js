@@ -11,6 +11,10 @@ function normalize(s) {
   return String(s ?? "").normalize("NFC").toLowerCase();
 }
 
+const SLUG_RE = /^[a-z0-9-]{2,40}$/;
+const PROFILE_RE = /^[a-z0-9-]{2,60}$/;
+const DEVICE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
+
 function validate(cfg) {
   if (!cfg || !Array.isArray(cfg.sectors) || cfg.sectors.length === 0) throw new Error("sectors.json: thiếu danh sách sectors");
   const keys = new Set();
@@ -21,7 +25,10 @@ function validate(cfg) {
     if (!Array.isArray(s.match) || s.match.length === 0) throw new Error(`sectors.json[${s.key}]: thiếu match`);
     if (!Array.isArray(s.stages) || s.stages.length < 2) throw new Error(`sectors.json[${s.key}]: cần ít nhất 2 công đoạn`);
     if (s.sensorStage !== undefined && !s.stages.some((st) => st.key === s.sensorStage)) throw new Error(`sectors.json[${s.key}]: sensorStage không nằm trong chuỗi công đoạn`);
-    if (s.analysis !== undefined && !["kiln", "dye"].includes(s.analysis)) throw new Error(`sectors.json[${s.key}]: analysis phải là kiln hoặc dye`);
+    if (s.analysis !== undefined && !SLUG_RE.test(String(s.analysis))) throw new Error(`sectors.json[${s.key}]: analysis phải là mã slug hợp lệ`);
+    if (s.profile !== undefined && !PROFILE_RE.test(String(s.profile))) throw new Error(`sectors.json[${s.key}]: profile không hợp lệ`);
+    if (s.devicePrefix !== undefined && !SLUG_RE.test(String(s.devicePrefix))) throw new Error(`sectors.json[${s.key}]: devicePrefix không hợp lệ`);
+    if (s.defaultDevice !== undefined && !DEVICE_RE.test(String(s.defaultDevice))) throw new Error(`sectors.json[${s.key}]: defaultDevice không hợp lệ`);
     const seen = new Set();
     for (const st of s.stages) {
       if (!/^[a-z0-9-]{2,40}$/.test(st.key ?? "") || !st.label) throw new Error(`sectors.json[${s.key}]: công đoạn không hợp lệ`);
@@ -53,7 +60,21 @@ function stagesFor(cfg, category) {
 
 /** Cấu hình gửi cho giao diện (không có gì nhạy cảm). */
 function publicView(cfg) {
-  return { defaultSector: cfg.defaultSector, sectors: cfg.sectors.map((s) => ({ key: s.key, label: s.label, intelligence: s.intelligence ?? null, analysis: s.analysis ?? null, sensorStage: s.sensorStage ?? null, ocopGroup: s.ocopGroup ?? null, stages: s.stages })) };
+  return {
+    defaultSector: cfg.defaultSector,
+    sectors: cfg.sectors.map((s) => ({
+      key: s.key,
+      label: s.label,
+      intelligence: s.intelligence ?? null,
+      analysis: s.analysis ?? null,
+      profile: s.profile ?? null,
+      devicePrefix: s.devicePrefix ?? null,
+      defaultDevice: s.defaultDevice ?? null,
+      sensorStage: s.sensorStage ?? null,
+      ocopGroup: s.ocopGroup ?? null,
+      stages: s.stages,
+    })),
+  };
 }
 
 module.exports = { load, validate, sectorOf, stagesFor, publicView };

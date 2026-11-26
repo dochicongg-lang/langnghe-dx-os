@@ -88,11 +88,13 @@ function luaWorkflow(cfg, origin) {
 }
 
 /** Policy MinIO cho các vai trò dùng mẫu "admin" hoặc "domain" (iot-writer và readonly do script thiết lập xử lý riêng). */
-function minioPolicies(cfg, iotBucket, appBucket, docsBucket = "dxos-docs", anchorBucket = "dxos-audit") {
+function minioPolicies(cfg, iotBucket, appBucket, docsBucket = "dxos-docs", anchorBucket = "dxos-audit", lakeBucket = "dxos-lake") {
   // Bucket tệp đính kèm hồ sơ chỉ dành cho trace-api (tài khoản trace-docs); người dùng cuối không được chạm tới bằng STS
   const denyDocs = { Effect: "Deny", Action: ["s3:*"], Resource: [`arn:aws:s3:::${docsBucket}`, `arn:aws:s3:::${docsBucket}/*`] };
   // Bucket bản neo nhật ký cũng chỉ dành cho trace-api (tài khoản trace-anchor)
   const denyAnchor = { Effect: "Deny", Action: ["s3:*"], Resource: [`arn:aws:s3:::${anchorBucket}`, `arn:aws:s3:::${anchorBucket}/*`] };
+  // Bucket hồ dữ liệu phân tích chỉ dành cho trace-api (tài khoản trace-lake)
+  const denyLake = { Effect: "Deny", Action: ["s3:*"], Resource: [`arn:aws:s3:::${lakeBucket}`, `arn:aws:s3:::${lakeBucket}/*`] };
   const denyIot = {
     Effect: "Deny",
     Action: ["s3:Put*", "s3:Delete*", "s3:Abort*", "s3:Bypass*"],
@@ -107,6 +109,7 @@ function minioPolicies(cfg, iotBucket, appBucket, docsBucket = "dxos-docs", anch
       denyIot,
       denyDocs,
       denyAnchor,
+      denyLake,
     ],
   };
   const domain = {
@@ -118,6 +121,7 @@ function minioPolicies(cfg, iotBucket, appBucket, docsBucket = "dxos-docs", anch
       denyIot,
       denyDocs,
       denyAnchor,
+      denyLake,
     ],
   };
   const out = {};
@@ -138,12 +142,12 @@ if (require.main === module) {
     else if (cmd === "lua" && args[0] === "trace") process.stdout.write(luaTrace(cfg, args[1]));
     else if (cmd === "lua" && args[0] === "workflow") process.stdout.write(luaWorkflow(cfg, args[1]));
     else if (cmd === "minio") {
-      const [dir, iot, app, docs, anchor] = args;
+      const [dir, iot, app, docs, anchor, lake] = args;
       if (!dir || !iot || !app) throw new Error("dùng: minio <thư-mục> <bucketIoT> <bucketỨngDụng>");
       fs.mkdirSync(dir, { recursive: true });
       for (const f of fs.readdirSync(dir)) if (f.endsWith(".json")) fs.unlinkSync(path.join(dir, f));
-      for (const [name, policy] of Object.entries(minioPolicies(cfg, iot, app, docs, anchor))) fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(policy, null, 2));
-      console.log(Object.keys(minioPolicies(cfg, iot, app, docs, anchor)).join(" "));
+      for (const [name, policy] of Object.entries(minioPolicies(cfg, iot, app, docs, anchor, lake))) fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(policy, null, 2));
+      console.log(Object.keys(minioPolicies(cfg, iot, app, docs, anchor, lake)).join(" "));
     } else throw new Error("lệnh không hợp lệ: roles | lua trace|workflow <origin> | minio <thư-mục> <bucketIoT> <bucketỨngDụng>");
   } catch (e) {
     console.error("gen-access:", e.message);

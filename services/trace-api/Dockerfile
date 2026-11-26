@@ -6,6 +6,7 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY *.js ./
+COPY routes ./routes
 COPY migrations ./migrations
 USER node
 EXPOSE 3000

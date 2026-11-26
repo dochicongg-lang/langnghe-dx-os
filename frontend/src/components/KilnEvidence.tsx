@@ -13,6 +13,8 @@ export const flagText = (flag: string, q: NonNullable<IotEvidence["quality"]>) =
     "few-samples": "Quá ít mẫu đo để đánh giá.",
     "object-overwritten": `${q.overwritten} tệp dữ liệu bị ghi đè sau khi ghi; hệ thống chỉ dùng bản ghi đầu tiên (đã khóa chống sửa).`,
     "object-deleted": `${q.deleted} tệp dữ liệu bị yêu cầu xóa; bản gốc vẫn được giữ nguyên (đã khóa chống xóa).`,
+    "bad-signature": `${q.badSignatures ?? 1} mẫu đo bị loại vì sai chữ ký số Ed25519 của thiết bị biên.`,
+    "unsigned-sample": `${q.unsignedRejected ?? 1} mẫu đo bị loại vì thiếu chữ ký số Ed25519 bắt buộc.`,
   })[flag] ?? flag;
 
 export const fmtTime = (iso: string) =>
@@ -73,7 +75,11 @@ export default function KilnEvidence({ iot, insight, reference }: { iot: IotEvid
         <>
           <p className="mt-2 text-xs text-stone-500">
             Độ phủ dữ liệu <Tip text="Tỉ lệ thời gian cảm biến có gửi số liệu. Thấp là có đoạn mất kết nối." /> {Math.round(iot.quality.coverage * 100)}% · khoảng trống lớn nhất {iot.quality.maxGapSec} giây
+            {insight?.metrics.heatWorkCh !== undefined ? ` · nhiệt tích lũy ${insight.metrics.heatWorkCh} °C·h` : ""}
           </p>
+          {Boolean(iot.quality.signedSamples && iot.quality.signedSamples > 0) && (
+            <p className="mt-1 text-xs font-medium text-emerald-700">✓ Đã xác thực chữ ký số biên Ed25519 ({iot.quality.signedSamples} mẫu)</p>
+          )}
           {iot.quality.flags.map((f) => (
             <p key={f} className="mt-1 rounded-md bg-amber-50 p-2 text-xs text-amber-800">
               ⚠ {flagText(f, iot.quality!)}

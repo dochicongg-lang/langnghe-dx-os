@@ -2,12 +2,14 @@
 // Copyright 2026 The Làng Nghề Số contributors
 "use strict";
 /**
- * Tác tử theo sự kiện, có người duyệt (human-in-the-loop). Tác tử KHÔNG tự hành động: khi bộ luật phân tích mẻ nung báo "cần xem lại" hoặc
- * "cảnh báo", nó tạo một ĐỀ XUẤT kèm lý do và bằng chứng; chỉ khi một người có thẩm quyền duyệt thì hành động (gửi thông báo) mới được thực hiện.
- * Toàn bộ là hàm thuần để kiểm thử bằng dữ liệu giả.
+ * Cơ chế đề xuất cảnh báo có kiểm duyệt (Human-in-the-loop Alerting).
+ *
+ * Khi bộ luật phân tích đường cong nhiệt (kiln.js) trả kết luận "warn" (cần xem lại) hoặc "alert" (cảnh báo),
+ * mô-đun tạo một ĐỀ XUẤT CẢNH BÁO kèm căn cứ số liệu; chỉ khi người có thẩm quyền duyệt trên giao diện
+ * thì thông báo mới được phát hành. Toàn bộ là hàm thuần, không phụ thuộc mạng hay CSDL.
  */
 
-/** Đề xuất từ kết quả phân tích mẻ nung; trả null nếu không cần đề xuất (đạt chuẩn hoặc chưa đủ dữ liệu). */
+/** Tạo đề xuất cảnh báo từ kết quả phân tích đường cong nhiệt; trả null nếu đạt chuẩn hoặc chưa đủ dữ liệu. */
 function proposeFromKiln({ product, eventId, insight }) {
   if (!insight || !["warn", "alert"].includes(insight.verdict)) return null;
   const severity = insight.verdict;
@@ -39,7 +41,17 @@ function proposeFromKiln({ product, eventId, insight }) {
 function notificationFor(proposal) {
   const a = proposal.action;
   if (!a || a.type !== "notify") throw new Error("hành động đề xuất không được hỗ trợ");
-  return { dedupe_key: `agent:${proposal.id}`, kind: "agent_kiln", level: a.level === "alert" ? "alert" : "warn", title: a.title, body: a.body, link: a.link ?? null, for_role: a.for_role, for_coop: a.for_coop ?? null, for_user: null };
+  return {
+    dedupe_key: `agent:${proposal.id}`,
+    kind: "agent_kiln",
+    level: a.level === "alert" ? "alert" : "warn",
+    title: a.title,
+    body: a.body,
+    link: a.link ?? null,
+    for_role: a.for_role,
+    for_coop: a.for_coop ?? null,
+    for_user: null,
+  };
 }
 
 module.exports = { proposeFromKiln, notificationFor };

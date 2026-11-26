@@ -43,6 +43,34 @@ test("giao diện nhận cấu hình gọn", () => {
   assert.equal(v.sectors.length, 2);
   assert.equal(v.sectors[0].intelligence, "kiln");
   assert.equal(v.sectors[1].intelligence, "dye");
+  assert.equal(v.sectors[0].profile, "gom-men-rach");
+  assert.equal(v.sectors[1].profile, "lua-nhuom");
+  assert.equal(v.sectors[0].devicePrefix, "kiln");
+  assert.equal(v.sectors[1].devicePrefix, "dye");
   assert.equal(v.sectors[0].sensorStage, "nung-hoan-thien");
   assert.equal(v.sectors[1].sensorStage, "nhuom-hoan-thien");
+});
+
+test("hỗ trợ thêm ngành thứ 3 trong JSON mà không bị giới hạn tên analysis cứng", () => {
+  const extended = JSON.parse(JSON.stringify(CFG));
+  extended.sectors.push({
+    key: "che",
+    label: "Chè truyền thống",
+    match: ["chè", "trà"],
+    intelligence: "tea",
+    analysis: "tea-dry",
+    profile: "che-sao",
+    devicePrefix: "tea",
+    defaultDevice: "tea-01",
+    sensorStage: "sao-che",
+    stages: [
+      { key: "thu-hai", label: "Thu hái" },
+      { key: "sao-che", label: "Sao chè" },
+    ],
+  });
+  const ok = sectors.validate(extended);
+  const v = sectors.publicView(ok);
+  assert.equal(v.sectors.length, 3);
+  assert.equal(v.sectors[2].devicePrefix, "tea");
+  assert.equal(v.sectors[2].defaultDevice, "tea-01");
 });

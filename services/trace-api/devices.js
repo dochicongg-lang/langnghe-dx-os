@@ -16,8 +16,10 @@ const fs = require("node:fs");
 
 const DEVICE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
 const GATEWAY_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
+const COOP_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,59}$/;
+const PUBKEY_RE = /^[0-9a-fA-F]{64}$/;
 
-/** Phân tích nội dung JSON thành Map(deviceId -> { gateway, min?, max?, maxRatePerSec? }). Ném lỗi nếu sai định dạng. */
+/** Phân tích nội dung JSON thành Map(deviceId -> { gateway, coop?, min?, max?, maxRatePerSec? }). Ném lỗi nếu sai định dạng. */
 function parseDevices(text) {
   let doc;
   try {
@@ -38,14 +40,42 @@ function parseDevices(text) {
     const o = typeof entry === "string" ? { gateway: entry } : entry;
     if (typeof o !== "object" || o === null || Array.isArray(o)) throw new Error(`cấu hình thiết bị ${id} không hợp lệ`);
     if (typeof o.gateway !== "string" || !GATEWAY_RE.test(o.gateway)) throw new Error(`gateway của thiết bị ${id} không hợp lệ`);
+    let coop;
+    if (o.coop !== undefined) {
+      if (typeof o.coop !== "string" || !COOP_RE.test(o.coop)) throw new Error(`coop của thiết bị ${id} không hợp lệ`);
+      coop = o.coop;
+    }
     const min = limit(o.min, "min", id);
     const max = limit(o.max, "max", id);
     const maxRatePerSec = limit(o.maxRatePerSec, "maxRatePerSec", id);
     if (min !== undefined && max !== undefined && min >= max) throw new Error(`min phải nhỏ hơn max (thiết bị ${id})`);
     if (maxRatePerSec !== undefined && maxRatePerSec <= 0) throw new Error(`maxRatePerSec phải > 0 (thiết bị ${id})`);
-    map.set(id, { gateway: o.gateway, min, max, maxRatePerSec });
+    const rec = { gateway: o.gateway, min, max, maxRatePerSec };
+    if (coop !== undefined) rec.coop = coop;
+    if (o.publicKey !== undefined) {
+      if (typeof o.publicKey !== "string" || !PUBKEY_RE.test(o.publicKey)) throw new Error(`publicKey Ed25519 của thiết bị ${id} phải là hex 64 ký tự`);
+      rec.publicKey = o.publicKey.toLowerCase();
+    }
+    if (o.requireSignature !== undefined) {
+      if (typeof o.requireSignature !== "boolean") throw new Error(`requireSignature của thiết bị ${id} phải là boolean`);
+      rec.requireSignature = o.requireSignature;
+    }
+    map.set(id, rec);
   }
   return map;
+}
+
+/** Lọc danh bạ thiết bị theo phạm vi quyền (`all` hoặc `coop`) của người dùng. */
+function devicesForUser(devicesMap, scope, coop) {
+  if (scope === "all") return new Map(devicesMap);
+  if (scope === "coop" && coop) {
+    const out = new Map();
+    for (const [id, cfg] of devicesMap.entries()) {
+      if (cfg.coop === coop) out.set(id, cfg);
+    }
+    return out;
+  }
+  return new Map();
 }
 
 /** Đọc danh bạ từ tệp. Không có tệp -> danh bạ rỗng (tính năng gắn IoT sẽ báo thiết bị chưa đăng ký). */
@@ -60,4 +90,4 @@ function loadDevices(file) {
   return parseDevices(text);
 }
 
-module.exports = { parseDevices, loadDevices };
+module.exports = { parseDevices, loadDevices, devicesForUser };

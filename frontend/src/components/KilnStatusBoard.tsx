@@ -3,74 +3,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Series } from "@/lib/iot";
+import type { BoardConfig, Series } from "@/lib/iot";
 
-type Kind = "kiln" | "dye";
 type Phase = "idle" | "cold" | "ramp" | "hold" | "cool";
 interface Pt {
   t: number;
   v: number;
 }
 
-/**
- * Cấu hình theo nghề. Vùng tham chiếu lấy từ hồ sơ trong config/kiln-profiles.json: là số liệu THAM KHẢO/MINH HỌA, chưa được thợ hoặc chuyên gia xác nhận.
- * Nhuộm tơ: khuyến cáo nhuộm tơ tằm bằng thuốc nhuộm axit ở 85–90 °C, giữ khoảng 35–40 phút, không để sôi, nâng nhiệt khoảng 1 °C mỗi phút.
- */
-const KINDS: Record<
-  Kind,
-  {
-    prefix: string;
-    scaleMax: number;
-    ticks: number[];
-    ref: { peakMin: number; peakMax: number; critical: number; holdAbove: number; holdMinutes: number; rampMaxPerHour: number };
-    nearBand: number; // sát đỉnh trong khoảng này thì tính là đang giữ nhiệt
-    rampFrom: number;
-    rampWindowMin: number;
-    cold: { last: number; peak: number };
-    labels: { phases: [string, string, string, string]; total: string; recent: string; aria: string; device: string; peakNote: string; note: string };
-  }
-> = {
-  kiln: {
-    prefix: "kiln",
-    scaleMax: 1400,
-    ticks: [0, 400, 800, 1200],
-    ref: { peakMin: 1100, peakMax: 1220, critical: 1300, holdAbove: 1100, holdMinutes: 60, rampMaxPerHour: 250 },
-    nearBand: 30,
-    rampFrom: 300,
-    rampWindowMin: 30,
-    cold: { last: 80, peak: 200 },
-    labels: {
-      phases: ["Chuẩn bị", "Gia nhiệt", "Giữ nhiệt", "Làm nguội"],
-      total: "Tổng thời gian nung",
-      recent: "Mẻ nung gần nhất",
-      aria: "Các giai đoạn của mẻ nung",
-      device: "lò",
-      peakNote: "Vùng đỉnh chuẩn",
-      note: "Vùng tham chiếu lấy từ hồ sơ nung đang dùng; đây là số liệu minh họa, chưa được thợ gốm hoặc chuyên gia xác nhận. Kết luận cho từng sản phẩm xem ở mục bên dưới.",
-    },
-  },
-  dye: {
-    prefix: "dye",
-    scaleMax: 120,
-    ticks: [0, 40, 80, 120],
-    ref: { peakMin: 85, peakMax: 93, critical: 100, holdAbove: 82, holdMinutes: 30, rampMaxPerHour: 90 },
-    nearBand: 4,
-    rampFrom: 30,
-    rampWindowMin: 15,
-    cold: { last: 40, peak: 45 },
-    labels: {
-      phases: ["Chuẩn bị bể", "Nâng nhiệt", "Giữ nhiệt", "Hạ nhiệt"],
-      total: "Tổng thời gian nhuộm",
-      recent: "Mẻ nhuộm gần nhất",
-      aria: "Các giai đoạn của mẻ nhuộm",
-      device: "bể nhuộm",
-      peakNote: "Vùng nhiệt nhuộm",
-      note: "Ngưỡng tham khảo từ tài liệu về nhuộm tơ tằm bằng thuốc nhuộm axit (85–90 °C, giữ khoảng 35–40 phút, không để sôi); không phải số liệu riêng của làng lụa và chưa được nghệ nhân hoặc chuyên gia xác nhận. Kết luận cho từng sản phẩm xem ở mục bên dưới.",
-    },
-  },
-};
-
-type KindCfg = (typeof KINDS)[Kind];
 const LIVE_WITHIN_MS = 15 * 60_000;
 const PHASE_KEYS: Exclude<Phase, "idle">[] = ["cold", "ramp", "hold", "cool"];
 
@@ -85,7 +25,7 @@ const fmtTime = (t: number) => {
 };
 
 /** Chia mẻ thành các giai đoạn dựa trên đường cong: đến sát đỉnh = nâng nhiệt, quanh đỉnh = giữ nhiệt, sau đó = hạ nhiệt. */
-function analyze(points: Pt[], now: number, k: KindCfg) {
+function analyze(points: Pt[], now: number, k: BoardConfig) {
   const last = points[points.length - 1];
   const first = points[0];
   let peak = first;
@@ -114,7 +54,9 @@ function analyze(points: Pt[], now: number, k: KindCfg) {
   for (let i = 0, j = 0; i < points.length; i++) {
     while (j < i && points[i].t - points[j].t > k.rampWindowMin * 60_000) j++;
     const dt = points[i].t - points[j].t;
-    if (j < i && dt >= (k.rampWindowMin * 2 * 60_000) / 3 && points[j].v >= k.rampFrom && i <= rampEnd + 1) maxRamp = Math.max(maxRamp, ((points[i].v - points[j].v) / dt) * 3_600_000);
+    if (j < i && dt >= (k.rampWindowMin * 2 * 60_000) / 3 && points[j].v >= k.rampFrom && i <= rampEnd + 1) {
+      maxRamp = Math.max(maxRamp, ((points[i].v - points[j].v) / dt) * 3_600_000);
+    }
   }
   return { first, last, peak, rampEnd, holdEnd, phase, live, holdMs, maxRamp };
 }
@@ -126,7 +68,7 @@ function arcPath(cx: number, cy: number, r: number, from: number, to: number) {
   return `M ${s.x.toFixed(1)} ${s.y.toFixed(1)} A ${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${e.x.toFixed(1)} ${e.y.toFixed(1)}`;
 }
 
-function Gauge({ value, peak, tone, k, aria }: { value: number; peak: number; tone: string; k: KindCfg; aria: string }) {
+function Gauge({ value, peak, tone, k, aria }: { value: number; peak: number; tone: string; k: BoardConfig; aria: string }) {
   const deg = (v: number) => Math.max(0, Math.min(180, (v / k.scaleMax) * 180));
   const needle = deg(value);
   const nx = 110 + 66 * Math.cos(Math.PI - (needle / 180) * Math.PI);
@@ -150,7 +92,7 @@ function Gauge({ value, peak, tone, k, aria }: { value: number; peak: number; to
   );
 }
 
-function Chart({ points, a, k, label }: { points: Pt[]; a: ReturnType<typeof analyze>; k: KindCfg; label: string }) {
+function Chart({ points, a, k, label }: { points: Pt[]; a: ReturnType<typeof analyze>; k: BoardConfig; label: string }) {
   const W = 640;
   const H = 220;
   const L = 44;
@@ -205,17 +147,16 @@ const TONE: Record<Phase, { label: string; pill: string; gauge: string }> = {
   cool: { label: "Đang hạ nhiệt", pill: "bg-amber-50 text-amber-800", gauge: "#D49A2A" },
 };
 
-/** Bảng theo dõi trạng thái lò nung (gốm) hoặc bể nhuộm (lụa): đồng hồ nhiệt, giai đoạn, các chỉ số chính và đường cong. Số liệu lấy từ cảm biến. */
-export default function KilnStatusBoard({ series, kind = "kiln" }: { series: Series[]; kind?: Kind }) {
+/** Bảng theo dõi trạng thái thiết bị theo cấu hình ngành động từ máy chủ (gốm, lụa hoặc bất kỳ ngành nghề nào khai báo trong config). */
+export default function KilnStatusBoard({ series, board }: { series: Series[]; board: BoardConfig }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
   }, []);
-  const k = KINDS[kind];
-  const sensor = series.find((s) => s.id.startsWith(k.prefix) && s.metric === "temperature");
+  const sensor = series.find((s) => s.id.startsWith(board.prefix) && s.metric === board.metric);
   if (!sensor || sensor.points.length < 2) return null;
-  const a = analyze(sensor.points, now, k);
+  const a = analyze(sensor.points, now, board);
   const shown: Phase = a.live ? a.phase : "idle";
   const tone = TONE[shown];
   const curIdx = PHASE_KEYS.indexOf(a.phase as Exclude<Phase, "idle">);
@@ -225,14 +166,15 @@ export default function KilnStatusBoard({ series, kind = "kiln" }: { series: Ser
     hold: sensor.points[a.holdEnd].t - sensor.points[a.rampEnd].t,
     cool: a.last.t - sensor.points[a.holdEnd].t,
   };
-  const r = k.ref;
+  const r = board.ref;
+  const unit = board.unit || "°C";
   const tiles = [
-    { label: "Nhiệt độ đỉnh", value: `${Math.round(a.peak.v)} °C`, note: `${k.labels.peakNote} ${r.peakMin}–${r.peakMax} °C`, ok: a.peak.v >= r.peakMin && a.peak.v <= r.peakMax, bad: a.peak.v > r.critical },
-    { label: "Thời gian giữ nhiệt", value: fmtDur(a.holdMs), note: `Cần từ ${r.holdMinutes} phút trên ${r.holdAbove} °C`, ok: a.holdMs >= r.holdMinutes * 60_000, bad: false },
-    { label: "Tốc độ nâng nhiệt lớn nhất", value: `${Math.round(a.maxRamp)} °C/giờ`, note: `Không quá ${r.rampMaxPerHour} °C/giờ`, ok: a.maxRamp <= r.rampMaxPerHour, bad: a.maxRamp > r.rampMaxPerHour * 1.3 },
-    { label: k.labels.total, value: fmtDur(a.last.t - a.first.t), note: `Từ ${fmtTime(a.first.t)}`, ok: true, bad: false },
+    { label: "Nhiệt độ đỉnh", value: `${Math.round(a.peak.v)} ${unit}`, note: `${board.labels.peakNote} ${r.peakMin}–${r.peakMax} ${unit}`, ok: a.peak.v >= r.peakMin && a.peak.v <= r.peakMax, bad: a.peak.v > r.critical },
+    { label: "Thời gian giữ nhiệt", value: fmtDur(a.holdMs), note: `Cần từ ${r.holdMinutes} phút trên ${r.holdAbove} ${unit}`, ok: a.holdMs >= r.holdMinutes * 60_000, bad: false },
+    { label: "Tốc độ nâng nhiệt lớn nhất", value: `${Math.round(a.maxRamp)} ${unit}/giờ`, note: `Không quá ${r.rampMaxPerHour} ${unit}/giờ`, ok: a.maxRamp <= r.rampMaxPerHour, bad: a.maxRamp > r.rampMaxPerHour * 1.3 },
+    { label: board.labels.total, value: fmtDur(a.last.t - a.first.t), note: `Từ ${fmtTime(a.first.t)}`, ok: true, bad: false },
   ];
-  const id = `board-${kind}`;
+  const id = `board-${board.id}`;
   return (
     <section aria-labelledby={id} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -241,7 +183,7 @@ export default function KilnStatusBoard({ series, kind = "kiln" }: { series: Ser
             {sensor.deviceName}
           </h2>
           <p className="text-xs text-stone-500">
-            {a.live ? "Dữ liệu trực tiếp từ cảm biến" : k.labels.recent} · cập nhật {fmtTime(a.last.t)}
+            {board.sectorLabel} · {a.live ? "Dữ liệu trực tiếp từ cảm biến" : board.labels.recent} · cập nhật {fmtTime(a.last.t)}
           </p>
         </div>
         <span className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${tone.pill}`}>{tone.label}</span>
@@ -249,20 +191,22 @@ export default function KilnStatusBoard({ series, kind = "kiln" }: { series: Ser
 
       <div className="mt-5 grid gap-6 lg:grid-cols-[260px_1fr] lg:items-center">
         <div>
-          <Gauge value={a.last.v} peak={a.peak.v} tone={tone.gauge} k={k} aria={`Nhiệt độ ${k.labels.device}`} />
-          <p className="mt-1 text-center text-3xl font-bold text-stone-900">{Math.round(a.last.v)} °C</p>
+          <Gauge value={a.last.v} peak={a.peak.v} tone={tone.gauge} k={board} aria={`Nhiệt độ ${board.labels.device}`} />
+          <p className="mt-1 text-center text-3xl font-bold text-stone-900">
+            {Math.round(a.last.v)} {unit}
+          </p>
           <p className="text-center text-xs text-stone-500">
-            {a.live ? "Nhiệt độ hiện tại" : "Nhiệt độ ở điểm đo cuối"} · cao nhất đã đạt {Math.round(a.peak.v)} °C
+            {a.live ? "Nhiệt độ hiện tại" : "Nhiệt độ ở điểm đo cuối"} · cao nhất đã đạt {Math.round(a.peak.v)} {unit}
           </p>
         </div>
-        <ol className="grid grid-cols-4 gap-2" aria-label={k.labels.aria}>
+        <ol className="grid grid-cols-4 gap-2" aria-label={board.labels.aria}>
           {PHASE_KEYS.map((pk, i) => {
             const done = i < curIdx || (!a.live && i === curIdx);
             const cur = a.live && i === curIdx;
             return (
               <li key={pk} className={`rounded-xl border p-3 text-center ${cur ? "border-brand-400 bg-brand-50" : done ? "border-emerald-200 bg-emerald-50/60" : "border-stone-200 bg-stone-50"}`}>
                 <span className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${cur ? "bg-brand-600 text-white" : done ? "bg-emerald-600 text-white" : "bg-stone-200 text-stone-500"}`}>{done ? "✓" : i + 1}</span>
-                <p className="mt-1.5 text-xs font-semibold text-stone-800">{k.labels.phases[i]}</p>
+                <p className="mt-1.5 text-xs font-semibold text-stone-800">{board.labels.phases[i]}</p>
                 <p className="text-[11px] text-stone-500">{pk === "cold" ? "—" : fmtDur(dur[pk])}</p>
               </li>
             );
@@ -284,13 +228,13 @@ export default function KilnStatusBoard({ series, kind = "kiln" }: { series: Ser
       </dl>
 
       <div className="mt-5 rounded-xl bg-stone-50 p-3 sm:p-4">
-        <Chart points={sensor.points} a={a} k={k} label={`Đường cong nhiệt độ của ${k.labels.recent.toLowerCase()}`} />
+        <Chart points={sensor.points} a={a} k={board} label={`Đường cong nhiệt độ của ${board.labels.recent.toLowerCase()}`} />
         <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-stone-500">
           <span className="inline-flex items-center gap-1">
-            <i className="inline-block h-2.5 w-4 rounded-sm bg-emerald-600/30" /> {k.labels.peakNote}
+            <i className="inline-block h-2.5 w-4 rounded-sm bg-emerald-600/30" /> {board.labels.peakNote}
           </span>
           <span className="inline-flex items-center gap-1">
-            <i className="inline-block h-0.5 w-4 border-t-2 border-dashed border-red-500" /> Ngưỡng nguy hiểm {r.critical} °C
+            <i className="inline-block h-0.5 w-4 border-t-2 border-dashed border-red-500" /> Ngưỡng nguy hiểm {r.critical} {unit}
           </span>
           <span>Vạch nét đứt dọc: chuyển giai đoạn</span>
         </p>

@@ -4,7 +4,7 @@
 // Chạy: cd services/trace-api && npm test   (dùng node:test có sẵn, không cần cài thêm gì)
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { IotError, parseWindow, keyTime, folderOf, dayPrefixes, selectKeys, collectPoints, assess, summarize, createS3Client, buildEvidence } = require("../iot");
+const { IotError, parseWindow, keyTime, folderOf, dayPrefixes, selectKeys, collectPoints, assess, summarize, createS3Client, buildEvidence, readLatestReadings } = require("../iot");
 
 // Bộ chuyển đổi cho các fake S3 kiểu cũ (chỉ có listKeys): mỗi tệp có đúng một phiên bản.
 const asVersions = (s3) => ({
@@ -330,3 +330,53 @@ test("buildEvidence: tệp chỉ còn dấu xóa (không còn bản nào) không
   const ev = await buildEvidence(W, s3, "gw1");
   assert.equal(ev.quality.deleted, 1);
 });
+
+// ---------- readLatestReadings (cách ly theo HTX & cache theo ngày) ----------
+test("readLatestReadings: danh sách thiết bị rỗng -> không gọi S3", async () => {
+  let calls = 0;
+  const s3 = { listKeys: async () => { calls++; return []; }, getObject: async () => "" };
+  const r = await readLatestReadings(s3, new Map());
+  assert.deepEqual(r, { readings: [], objects: 0 });
+  assert.equal(calls, 0);
+});
+
+test("readLatestReadings: chỉ trả về thiết bị của HTX được phép, loại thiết bị HTX khác và dữ liệu giả mạo gateway", async () => {
+  const listed = [];
+  const kGw1 = "iot/service-account-gw1/2026-11-12/2026-11-12T15-00-00-000Z.ndjson";
+  const kGw2 = "iot/service-account-gw2/2026-11-12/2026-11-12T15-00-00-000Z.ndjson";
+  const s3 = {
+    listKeys: async (prefix) => {
+      listed.push(prefix);
+      if (prefix === "iot/service-account-gw1/") return [kGw1];
+      if (prefix === "iot/service-account-gw2/") return [kGw2];
+      return [];
+    },
+    getObject: async (k) => {
+      if (k === kGw1) {
+        return [
+          reading(WBASE, 1120, { deviceId: "kiln-01" }),
+          reading(WBASE, 88, { deviceId: "dye-01" }), // khác HTX dù cùng gateway
+          "{corrupt",
+        ].join("\n");
+      }
+      return reading(WBASE, 9999, { deviceId: "kiln-01" }); // gateway khác giả mạo kiln-01
+    },
+  };
+  const allowed = new Map([["kiln-01", { gateway: "gw1", coop: "htx-demo" }]]);
+  const cache = new Map();
+  const r1 = await readLatestReadings(s3, allowed, { cache, now: Date.parse("2026-11-20T00:00:00Z") });
+  assert.deepEqual(listed, ["iot/service-account-gw1/"]);
+  assert.equal(r1.objects, 1);
+  assert.deepEqual(r1.readings.map((x) => [x.deviceId, x.value]), [["kiln-01", 1120]]);
+
+  // Lần đọc tiếp theo cùng ngày cũ -> dùng cache S3 thay vì gọi getObject lại
+  let getCalls = 0;
+  const s3Cached = {
+    listKeys: async () => [kGw1],
+    getObject: async () => { getCalls++; return ""; },
+  };
+  const r2 = await readLatestReadings(s3Cached, new Map([["dye-01", { gateway: "gw1", coop: "htx-lua" }]]), { cache, now: Date.parse("2026-11-20T00:00:00Z") });
+  assert.equal(getCalls, 0);
+  assert.deepEqual(r2.readings.map((x) => [x.deviceId, x.value]), [["dye-01", 88]]);
+});
+

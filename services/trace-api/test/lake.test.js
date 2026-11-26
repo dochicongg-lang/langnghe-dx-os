@@ -60,3 +60,74 @@ test("cột của mỗi bộ dữ liệu đều hợp lệ và tên truy vấn t
   }
   for (const a of Object.values(lake.ANALYTICS)) assert.ok(lake.DATASETS[a.dataset] && a.sql.includes("{FILE}"));
 });
+
+test("Hive partitioning & cắt tỉa phân vùng (partition pruning): chỉ đọc đúng phân vùng khớp filter", async () => {
+  assert.equal(lake.partitionKey("kiln_runs", { coop: "htx-demo", year: "2026", month: "11" }, "20261125T000000", "abcdef12"), "lake/kiln_runs/coop=htx-demo/year=2026/month=11/part-20261125T000000-abcdef12.parquet");
+  const all = [
+    { coop: "htx-demo", year: "2026", month: "10", key: "k1" },
+    { coop: "htx-demo", year: "2026", month: "11", key: "k2" },
+    { coop: "htx-lua", year: "2026", month: "11", key: "k3" },
+  ];
+  assert.deepEqual(lake.filterPartitions(all, { coop: "htx-demo", month: "11" }).map((x) => x.key), ["k2"]);
+  assert.deepEqual(lake.filterPartitions(all, { coop: "htx-lua" }).map((x) => x.key), ["k3"]);
+
+  // Giả lập S3 + Pool để kiểm tra exportAll -> runAnalytics với cắt tỉa phân vùng thật
+  const store = new Map();
+  const s3Gets = [];
+  const fakeS3 = {
+    putObject: async (k, buf) => store.set(k, Buffer.from(buf)),
+    getObjectBuffer: async (k) => {
+      s3Gets.push(k);
+      return store.get(k);
+    },
+  };
+  const fakeClient = {
+    query: async (sql) => {
+      if (sql.includes("pg_try_advisory_lock")) return { rows: [{ ok: true }] };
+      if (sql.includes("INSERT INTO lake_runs")) return { rows: [{ id: 99 }] };
+      return { rows: [] };
+    },
+    release: () => {},
+  };
+  let savedRun;
+  const fakePool = {
+    connect: async () => fakeClient,
+    query: async (sql, params) => {
+      if (sql.includes("FROM ocop_applications")) {
+        return {
+          rows: [
+            { code: "OCOP-1", product_name: "Gốm", product_group: "thu-cong-my-nghe", owner: "hoa", coop: "htx-demo", state: "recognized", stars: 4, score: 78, decided_at: "2026-10-10", valid_until: "2029-10-10", created_at: "2026-10-01T00:00:00Z", updated_at: "2026-10-10T00:00:00Z" },
+            { code: "OCOP-2", product_name: "Lụa", product_group: "thu-cong-my-nghe", owner: "lua", coop: "htx-lua", state: "in_review", stars: null, score: null, decided_at: null, valid_until: null, created_at: "2026-11-05T00:00:00Z", updated_at: "2026-11-05T00:00:00Z" },
+          ],
+        };
+      }
+      if (sql.includes("SELECT id, object_key, sha256, created_at FROM lake_runs")) {
+        return { rows: savedRun ? [savedRun] : [] };
+      }
+      return { rows: [] };
+    },
+  };
+  fakeClient.query = async (sql, params) => {
+    if (sql.includes("pg_try_advisory_lock")) return { rows: [{ ok: true }] };
+    if (sql.includes("INSERT INTO lake_runs")) {
+      if (params[0] === "applications") savedRun = { id: 1, object_key: params[2], sha256: params[3], created_at: new Date().toISOString() };
+      return { rows: [{ id: 1 }] };
+    }
+    return { rows: [] };
+  };
+
+  const kilnStub = { analyze: () => ({ verdict: "ok" }), pickProfile: () => ({}), config: {} };
+  const exp = await lake.exportAll({ pool: fakePool, s3: fakeS3, kiln: kilnStub, readArchive: async () => [] }, "test");
+  const appExp = exp.exported.find((x) => x.dataset === "applications");
+  assert.equal(appExp.partitions, 2); // tách làm 2 phân vùng Hive riêng biệt
+
+  s3Gets.length = 0;
+  const pruned = await lake.runAnalytics(fakePool, fakeS3, "applications-by-state", { coop: "htx-lua" });
+  assert.equal(pruned.partitions_total, 2);
+  assert.equal(pruned.partitions_scanned, 1);
+  assert.deepEqual(pruned.rows, [{ state: "in_review", n: 1 }]);
+  // Khẳng định chỉ đọc manifest + đúng 1 tệp phân vùng của htx-lua, KHÔNG đọc htx-demo
+  assert.equal(s3Gets.length, 2);
+  assert.ok(s3Gets.some((k) => k.includes("coop=htx-lua")));
+  assert.ok(!s3Gets.some((k) => k.includes("coop=htx-demo")));
+});

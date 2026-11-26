@@ -14,7 +14,7 @@
 const fs = require("node:fs");
 
 const LEVEL_RANK = { alert: 3, warn: 2, info: 1, ok: 0 };
-const INTEGRITY_FLAGS = ["object-overwritten", "object-deleted"];
+const INTEGRITY_FLAGS = ["object-overwritten", "object-deleted", "bad-signature", "unsigned-sample"];
 const PUBLIC_MODES = ["all", "ok-only", "none"];
 const QUALITY_FLAGS = ["low-coverage", "out-of-range", "rapid-change", "few-samples"];
 // Câu chữ mặc định (nung gốm). Hồ sơ khác (ví dụ nhuộm lụa) đặt "terms" để dùng đúng từ của nghề đó.
@@ -49,9 +49,37 @@ function validateProfiles(cfg) {
     num(p.cooling?.windowMin, "cooling.windowMin");
     num(p.baseline?.minRuns, "baseline.minRuns");
     num(p.baseline?.maxDeviationPct, "baseline.maxDeviationPct");
+    if (p.heatWork !== undefined) {
+      if (typeof p.heatWork !== "object" || p.heatWork === null) throw new Error(`${w}: heatWork phải là đối tượng`);
+      if (p.heatWork.minCh !== undefined) num(p.heatWork.minCh, "heatWork.minCh");
+      if (p.heatWork.maxCh !== undefined) num(p.heatWork.maxCh, "heatWork.maxCh");
+      if (p.heatWork.minCh !== undefined && p.heatWork.maxCh !== undefined && p.heatWork.minCh >= p.heatWork.maxCh) {
+        throw new Error(`${w}: heatWork.minCh phải nhỏ hơn heatWork.maxCh`);
+      }
+    }
     if (p.terms !== undefined) {
       const bad = typeof p.terms !== "object" || p.terms === null || Object.entries(p.terms).some(([k, v]) => !(k in DEFAULT_TERMS) || typeof v !== "string" || !v);
       if (bad) throw new Error(`${w}: terms chỉ nhận các khóa ${Object.keys(DEFAULT_TERMS).join(", ")} với giá trị là chuỗi không rỗng`);
+    }
+    if (p.board !== undefined) {
+      const b = p.board;
+      if (typeof b !== "object" || b === null || Array.isArray(b)) throw new Error(`${w}: board phải là đối tượng`);
+      if (b.scaleMax !== undefined) num(b.scaleMax, "board.scaleMax");
+      if (b.nearBand !== undefined) num(b.nearBand, "board.nearBand");
+      if (b.ticks !== undefined && (!Array.isArray(b.ticks) || b.ticks.some((v) => typeof v !== "number" || !Number.isFinite(v)))) {
+        throw new Error(`${w}: board.ticks phải là mảng số`);
+      }
+      if (b.cold !== undefined) {
+        if (typeof b.cold !== "object" || b.cold === null || !Number.isFinite(b.cold.last) || !Number.isFinite(b.cold.peak)) {
+          throw new Error(`${w}: board.cold cần có số last và peak`);
+        }
+      }
+      if (b.phases !== undefined && (!Array.isArray(b.phases) || b.phases.length !== 4 || b.phases.some((s) => typeof s !== "string" || !s))) {
+        throw new Error(`${w}: board.phases phải là mảng 4 chuỗi không rỗng`);
+      }
+      for (const k of ["total", "peakNote", "recent", "aria"]) {
+        if (b[k] !== undefined && (typeof b[k] !== "string" || !b[k])) throw new Error(`${w}: board.${k} phải là chuỗi không rỗng`);
+      }
     }
   }
   for (const k of cfg.byKeyword ?? []) {
@@ -98,6 +126,33 @@ function minutesAbove(pts, thr) {
 }
 
 /**
+ * Nhiệt tích lũy (Heat Work, đơn vị: °C·giờ): tích phân hình thang diện tích đường cong nằm TRÊN ngưỡng kích hoạt `baseTempC`
+ * (ví dụ vùng nung kết men hoặc vùng giữ màu nhuộm), có nội suy chính xác tại điểm cắt ngưỡng.
+ */
+function computeHeatWork(pts, baseTempC = 0) {
+  let degHours = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const [t0, v0] = pts[i - 1];
+    const [t1, v1] = pts[i];
+    const dh = (t1 - t0) / 3600000;
+    if (dh <= 0) continue;
+    const a0 = v0 - baseTempC;
+    const a1 = v1 - baseTempC;
+    if (a0 <= 0 && a1 <= 0) continue;
+    if (a0 >= 0 && a1 >= 0) {
+      degHours += ((a0 + a1) / 2) * dh;
+    } else if (a0 < 0 && a1 > 0) {
+      const fracAbove = a1 / (a1 - a0);
+      degHours += (a1 / 2) * (dh * fracAbove);
+    } else {
+      const fracAbove = a0 / (a0 - a1);
+      degHours += (a0 / 2) * (dh * fracAbove);
+    }
+  }
+  return Math.round(degHours * 10) / 10;
+}
+
+/**
  * Tốc độ đổi lớn nhất (°C/giờ) tính trên các cửa sổ dài ít nhất windowMin phút, chỉ xét cửa sổ nằm trong vùng quan tâm.
  * dir "up": gia nhiệt, cả hai đầu cửa sổ >= lo. dir "down": làm nguội, đầu cửa sổ <= hi và cuối >= lo.
  * Trả về null nếu không có cửa sổ nào đủ dài (chưa đủ dữ liệu để kết luận).
@@ -131,7 +186,7 @@ const median = (a) => {
  * opts.baselinePeaks: đỉnh nhiệt của CÁC MẺ KHÁC trên cùng lò (mọi mẻ đã có bằng chứng, không chỉ mẻ trước đó) để so sánh.
  * Trả về { verdict, summary, findings: [{code, level, text}], metrics, baseline, profile }.
  */
-function analyze(iot, profile, { baselinePeaks = [] } = {}) {
+function analyze(iot, profile, { baselinePeaks = [], peerCurves = [], checkSynthetic = false } = {}) {
   const findings = [];
   const T = { ...DEFAULT_TERMS, ...(profile.terms ?? {}) };
   const add = (level, code, text) => findings.push({ code, level, text });
@@ -140,9 +195,18 @@ function analyze(iot, profile, { baselinePeaks = [] } = {}) {
   const peak = Number(iot?.max);
   const metrics = { peak: Number.isFinite(peak) ? peak : null, samples: iot?.count ?? 0 };
 
-  // 1. Toàn vẹn và độ tin cậy của chính dữ liệu
+  // 1. Toàn vẹn và độ tin cậy của chính dữ liệu (Object Lock + chữ ký số Ed25519)
   const integrity = flags.filter((f) => INTEGRITY_FLAGS.includes(f));
-  if (integrity.length) add("alert", "integrity", "Dữ liệu nguồn có dấu hiệu bị ghi đè hoặc xóa sau khi ghi. Hệ thống đã dùng bản ghi gốc, nhưng cần kiểm tra lại nguồn gốc số liệu.");
+  if (integrity.length) {
+    const sigFault = integrity.includes("bad-signature") || integrity.includes("unsigned-sample");
+    add(
+      "alert",
+      "integrity",
+      sigFault
+        ? "Phát hiện mẫu cảm biến sai hoặc thiếu chữ ký số Ed25519 của thiết bị biên. Cần kiểm tra thiết bị ngay."
+        : "Dữ liệu nguồn có dấu hiệu bị ghi đè hoặc xóa sau khi ghi. Hệ thống đã dùng bản ghi gốc, nhưng cần kiểm tra lại nguồn gốc số liệu.",
+    );
+  }
   const quality = flags.filter((f) => QUALITY_FLAGS.includes(f));
   if (quality.length) add("warn", "data-quality", "Chất lượng số liệu cảm biến thấp (khoảng trống, mẫu ngoài khoảng, đổi nhanh bất thường hoặc quá ít mẫu), kết luận có độ tin cậy thấp.");
 
@@ -159,13 +223,23 @@ function analyze(iot, profile, { baselinePeaks = [] } = {}) {
     add("ok", "peak-ok", `Đỉnh nhiệt ${peak} °C nằm trong khoảng chuẩn ${profile.peak.min}–${profile.peak.max} °C.`);
   }
 
-  // 3. Hình dạng đường cong: chỉ đánh giá khi đủ mẫu và đủ dài
+  // 3. Hình dạng đường cong, nhiệt tích lũy (Heat Work) & chống gian lận phát lại (Replay Detection)
   const enough = metrics.samples >= profile.minSamples && pts.length >= 5;
   if (!enough) {
     add("info", "insufficient", `Chưa đủ số liệu (${metrics.samples} mẫu, cần ít nhất ${profile.minSamples}) để đánh giá hình dạng đường cong.`);
   } else {
     metrics.durationMin = Math.round((pts[pts.length - 1][0] - pts[0][0]) / 60000);
     metrics.holdMin = minutesAbove(pts, profile.hold.aboveC);
+    metrics.heatWorkCh = computeHeatWork(pts, profile.ramp.fromC);
+    if (profile.heatWork) {
+      if (profile.heatWork.minCh !== undefined && metrics.heatWorkCh < profile.heatWork.minCh) {
+        add("warn", "heatwork-low", `Nhiệt tích lũy ${metrics.heatWorkCh} °C·giờ thấp hơn mức tối thiểu ${profile.heatWork.minCh} °C·giờ.`);
+      } else if (profile.heatWork.maxCh !== undefined && metrics.heatWorkCh > profile.heatWork.maxCh) {
+        add("warn", "heatwork-high", `Nhiệt tích lũy ${metrics.heatWorkCh} °C·giờ vượt mức tối đa ${profile.heatWork.maxCh} °C·giờ.`);
+      } else {
+        add("ok", "heatwork-ok", `Nhiệt tích lũy đạt ${metrics.heatWorkCh} °C·giờ.`);
+      }
+    }
     if (metrics.peak >= profile.hold.aboveC) {
       if (metrics.holdMin < profile.hold.minMinutes) add("warn", "hold-short", `Chỉ giữ trên ${profile.hold.aboveC} °C khoảng ${metrics.holdMin} phút, ngắn hơn mức tối thiểu ${profile.hold.minMinutes} phút.`);
       else add("ok", "hold-ok", `Giữ trên ${profile.hold.aboveC} °C khoảng ${metrics.holdMin} phút (đủ mức tối thiểu ${profile.hold.minMinutes} phút).`);
@@ -179,6 +253,9 @@ function analyze(iot, profile, { baselinePeaks = [] } = {}) {
       if (metrics.maxCoolPerHour > profile.cooling.maxPerHour) add("warn", "cool-fast", `Làm nguội tối đa ${metrics.maxCoolPerHour} °C/giờ trong vùng ${profile.cooling.fromC}→${profile.cooling.toC} °C, nhanh hơn mức ${profile.cooling.maxPerHour} °C/giờ (${T.coolNote}).`);
       else add("ok", "cool-ok", `Tốc độ làm nguội tối đa ${metrics.maxCoolPerHour} °C/giờ (trong mức ${profile.cooling.maxPerHour} °C/giờ).`);
     }
+
+    const fraudFindings = detectCurveFraud(pts, peerCurves, { checkSynthetic, terms: T });
+    for (const f of fraudFindings) add(f.level, f.code, f.text);
   }
 
   // 4. So với các mẻ trước của cùng lò
@@ -250,7 +327,89 @@ function referenceCurve(curves, { minPeers = REF_MIN_PEERS, n = REF_POINTS } = {
   return { n: rs.length, enough: true, points };
 }
 
-/** Một câu bằng lời: mẻ này lệch khỏi dải thường gặp ở đoạn nào (đoạn liên tiếp dài nhất nằm ngoài dải, cùng một phía). */
+/**
+ * Dynamic Time Warping (DTW) có ràng buộc dải Sakoe–Chiba trên hai đường cong đã chuẩn hóa thời gian (N = 60 điểm).
+ * Trả sai lệch nhiệt độ trung bình mỗi bước đồng chỉnh (°C), hoặc null nếu một trong hai đường cong không hợp lệ.
+ */
+function dtwDistance(curveA, curveB, { points = REF_POINTS, windowRatio = 0.2 } = {}) {
+  const a = Array.isArray(curveA) && typeof curveA[0] === "number" ? curveA : resampleCurve(curveA, points);
+  const b = Array.isArray(curveB) && typeof curveB[0] === "number" ? curveB : resampleCurve(curveB, points);
+  if (!a || !b || a.length !== b.length) return null;
+  const n = a.length;
+  const w = Math.max(2, Math.round(n * windowRatio));
+  const dp = Array.from({ length: n + 1 }, () => new Float64Array(n + 1).fill(Infinity));
+  dp[0][0] = 0;
+  for (let i = 1; i <= n; i++) {
+    const jStart = Math.max(1, i - w);
+    const jEnd = Math.min(n, i + w);
+    for (let j = jStart; j <= jEnd; j++) {
+      const cost = Math.abs(a[i - 1] - b[j - 1]);
+      const prev = Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      dp[i][j] = cost + prev;
+    }
+  }
+  return Math.round((dp[n][n] / n) * 10) / 10;
+}
+
+/**
+ * Phát hiện gian lận đường cong nhiệt:
+ *   1. `curve-replay` (alert): đường cong chuẩn hóa trùng khít bất thường (RMSD <= replayToleranceC) với một mẻ trước đó
+ *      (kể cả khi kẻ gian tịnh tiến mốc thời gian sang ngày mới).
+ *   2. `synthetic-smooth` (warn, khi bật `checkSynthetic`): đường cong dài có biến thiên lớn nhưng sai phân bậc hai hoàn toàn phẳng
+ *      (không có nhiễu lượng tử tự nhiên của cảm biến nhiệt thực tế).
+ */
+function detectCurveFraud(pts, peerCurves = [], { replayToleranceC = 0.2, checkSynthetic = false, terms = {} } = {}) {
+  const T = { ...DEFAULT_TERMS, ...terms };
+  const out = [];
+  const cur = resampleCurve(pts, REF_POINTS);
+  if (!cur) return out;
+
+  for (const peer of peerCurves ?? []) {
+    const peerPts = Array.isArray(peer?.curve) ? peer.curve : Array.isArray(peer) ? peer : null;
+    const ref = resampleCurve(peerPts, REF_POINTS);
+    if (!ref) continue;
+    let sq = 0;
+    for (let i = 0; i < cur.length; i++) {
+      const d = cur[i] - ref[i];
+      sq += d * d;
+    }
+    const rmsd = Math.sqrt(sq / cur.length);
+    if (rmsd <= replayToleranceC) {
+      const label = peer?.productCode ? ` của sản phẩm ${peer.productCode}` : "";
+      out.push({
+        code: "curve-replay",
+        level: "alert",
+        rmsdC: Math.round(rmsd * 100) / 100,
+        matchedProduct: peer?.productCode ?? null,
+        text: `Phát hiện dấu hiệu phát lại dữ liệu (Replay): hình dạng ${T.curve.toLowerCase()} trùng khớp bất thường (lệch RMSD ${Math.round(rmsd * 100) / 100} °C) với ${T.batch} trước đó${label}.`,
+      });
+      break;
+    }
+  }
+
+  if (checkSynthetic && pts.length >= 25) {
+    const vs = pts.map((p) => p[1]);
+    const span = Math.max(...vs) - Math.min(...vs);
+    if (span >= 30) {
+      const d2 = [];
+      for (let i = 1; i < vs.length - 1; i++) d2.push(Math.abs(vs[i + 1] - 2 * vs[i] + vs[i - 1]));
+      const sortedAbs = d2.sort((a, b) => a - b);
+      // Phân vị 85% bỏ qua các đỉnh gãy khúc chuyển giai đoạn nhưng bao phủ sai số làm tròn 0.1 °C của dữ liệu tuyến tính giả lập
+      const p85 = sortedAbs[Math.floor(sortedAbs.length * 0.85)] ?? 0;
+      if (p85 <= 0.12) {
+        out.push({
+          code: "synthetic-smooth",
+          level: "warn",
+          text: `${T.curve} trơn tuyến tính bất thường (biến thiên vi sai bậc hai P85 = ${Math.round(p85 * 1000) / 1000} °C), nghi là dữ liệu mô phỏng tổng hợp thay vì cảm biến vật lý.`,
+        });
+      }
+    }
+  }
+
+  return out;
+}
+
+/** Một câu bằng lời: mẻ này lệch khỏi dải thường gặp ở đoạn nào (kèm khoảng cách hình dạng DTW). */
 function compareToReference(curve, ref, terms = {}) {
   if (!ref?.enough) return null;
   const T = { ...DEFAULT_TERMS, ...terms };
@@ -259,6 +418,7 @@ function compareToReference(curve, ref, terms = {}) {
   if (!r || pts.length < 2) return null;
   const spanMin = (pts[pts.length - 1][0] - pts[0][0]) / 60000;
   const meds = ref.points.map((p) => p[1]);
+  const dtwC = dtwDistance(r, meds);
   const tol = Math.max(2, 0.01 * (Math.max(...meds) - Math.min(...meds)));
   let best = null;
   let cur = null;
@@ -273,11 +433,91 @@ function compareToReference(curve, ref, terms = {}) {
     } else cur = null;
     if (cur && (!best || cur.end - cur.start > best.end - best.start)) best = { ...cur };
   });
-  if (!best || best.end - best.start + 1 < 3) return { level: "ok", text: `${T.curve} nằm trong dải thường gặp của các ${T.batch} đạt trước đó.` };
+  if (!best || best.end - best.start + 1 < 3) {
+    return { level: "ok", dtwC, text: `${T.curve} nằm trong dải thường gặp của các ${T.batch} đạt trước đó (sai lệch DTW ${dtwC} °C).` };
+  }
   const len = best.end - best.start + 1;
   const hour = (i) => Math.round(((i / (r.length - 1)) * spanMin) / 6) / 10;
   const diff = Math.round(Math.abs(best.sum / len));
-  return { level: "warn", text: `Từ khoảng giờ thứ ${hour(best.start)} đến giờ thứ ${hour(best.end)}, ${T.batch} này ${best.side > 0 ? "cao hơn" : "thấp hơn"} dải thường gặp của các ${T.batch} đạt khoảng ${diff} °C.` };
+  return {
+    level: "warn",
+    dtwC,
+    text: `Từ khoảng giờ thứ ${hour(best.start)} đến giờ thứ ${hour(best.end)}, ${T.batch} này ${best.side > 0 ? "cao hơn" : "thấp hơn"} dải thường gặp của các ${T.batch} đạt khoảng ${diff} °C (sai lệch DTW ${dtwC} °C).`,
+  };
 }
 
-module.exports = { loadProfiles, validateProfiles, pickProfile, publicAllows, minutesAbove, maxRatePerHour, analyze, resampleCurve, referenceCurve, compareToReference };
+function autoScale(criticalMax) {
+  const steps = [10, 20, 25, 40, 50, 100, 200, 250, 400, 500, 1000];
+  const step = steps.find((st) => st * 3 >= criticalMax * 0.85) ?? Math.ceil(criticalMax / 3 / 100) * 100;
+  const scaleMax = Math.max(Math.ceil((criticalMax * 1.07) / step) * step, criticalMax + Math.round(step / 2));
+  const ticks = [0, step, step * 2, step * 3].filter((v) => v <= scaleMax);
+  return { scaleMax, ticks };
+}
+
+/** Sinh danh sách cấu hình bảng theo dõi cảm biến động từ `config/sectors.json` và `config/kiln-profiles.json`. */
+function boardConfigs(sectorsCfg, kilnCfg) {
+  const out = [];
+  for (const s of sectorsCfg?.sectors ?? []) {
+    if (!s.profile && !s.analysis) continue;
+    const profileId = s.profile && kilnCfg.profiles[s.profile] ? s.profile : pickProfile(kilnCfg, s.label).id;
+    const p = kilnCfg.profiles[profileId];
+    if (!p) continue;
+    const b = p.board ?? {};
+    const terms = { ...DEFAULT_TERMS, ...(p.terms ?? {}) };
+    const auto = autoScale(p.criticalMax);
+    const scaleMax = b.scaleMax ?? auto.scaleMax;
+    const ticks = b.ticks ?? auto.ticks;
+    const nearBand = b.nearBand ?? Math.max(2, Math.round((p.peak.max - p.peak.min) * 0.25));
+    const cold = b.cold ?? { last: Math.max(35, Math.round(p.ramp.fromC * 0.27)), peak: Math.max(45, Math.round(p.ramp.fromC * 0.67)) };
+    out.push({
+      id: s.key,
+      sectorKey: s.key,
+      sectorLabel: s.label,
+      profileId,
+      prefix: s.devicePrefix ?? s.analysis ?? s.key,
+      metric: "temperature",
+      unit: "°C",
+      scaleMax,
+      ticks,
+      ref: {
+        peakMin: p.peak.min,
+        peakMax: p.peak.max,
+        critical: p.criticalMax,
+        holdAbove: p.hold.aboveC,
+        holdMinutes: p.hold.minMinutes,
+        rampMaxPerHour: p.ramp.maxPerHour,
+      },
+      nearBand,
+      rampFrom: p.ramp.fromC,
+      rampWindowMin: p.ramp.windowMin,
+      cold,
+      labels: {
+        phases: b.phases ?? ["Chuẩn bị", "Nâng nhiệt", "Giữ nhiệt", "Hạ nhiệt"],
+        total: b.total ?? `Tổng thời gian ${terms.batch}`,
+        recent: b.recent ?? `${terms.batchCap} gần nhất`,
+        aria: b.aria ?? `Các giai đoạn của ${terms.batch}`,
+        device: terms.equipment,
+        peakNote: b.peakNote ?? `Vùng đỉnh chuẩn (${p.name})`,
+        note: p.note ?? "",
+      },
+    });
+  }
+  return out;
+}
+
+module.exports = {
+  loadProfiles,
+  validateProfiles,
+  pickProfile,
+  publicAllows,
+  minutesAbove,
+  computeHeatWork,
+  maxRatePerHour,
+  analyze,
+  resampleCurve,
+  dtwDistance,
+  detectCurveFraud,
+  referenceCurve,
+  compareToReference,
+  boardConfigs,
+};

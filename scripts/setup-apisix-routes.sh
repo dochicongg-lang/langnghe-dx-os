@@ -8,6 +8,7 @@ cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
 IOT_BUCKET="${IOT_BUCKET:-dxos-iot}"
 DOCS_BUCKET="${DOCS_BUCKET:-dxos-docs}"
+LAKE_BUCKET="${LAKE_BUCKET:-dxos-lake}"
 ANCHOR_BUCKET="${ANCHOR_BUCKET:-dxos-audit}"
 IOT_LOCK_MODE="${IOT_LOCK_MODE:-GOVERNANCE}"
 IOT_RETENTION_DAYS="${IOT_RETENTION_DAYS:-1825}"
@@ -166,6 +167,26 @@ POLICY
   && (mc admin policy attach local trace-anchor-rw --user '$ANCHOR_S3_USER' >/dev/null 2>&1 || true)"
 echo "OK: bucket bản neo '$ANCHOR_BUCKET' (Object Lock $IOT_LOCK_MODE, giữ $IOT_RETENTION_DAYS ngày) và tài khoản '$ANCHOR_S3_USER' cho trace-api (ghi/đọc anchors/, không xóa)."
 
+# ---- Bucket hồ dữ liệu phân tích (Parquet phân vùng Hive) + tài khoản riêng cho trace-api ----
+if [ -n "${LAKE_S3_USER:-}" ] && [ -n "${LAKE_S3_PASSWORD:-}" ]; then
+  docker exec dxos-minio sh -c "mc alias set local http://localhost:9000 '$MINIO_ROOT_USER' '$MINIO_ROOT_PASSWORD' >/dev/null \
+    && mc mb --ignore-existing local/$LAKE_BUCKET \
+    && mc anonymous set none local/$LAKE_BUCKET \
+    && cat > /tmp/trace-lake-rw.json <<'POLICY'
+{
+  \"Version\": \"2012-10-17\",
+  \"Statement\": [
+    { \"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\", \"s3:PutObject\"], \"Resource\": [\"arn:aws:s3:::$LAKE_BUCKET/lake/*\"] },
+    { \"Effect\": \"Allow\", \"Action\": [\"s3:ListBucket\"], \"Resource\": [\"arn:aws:s3:::$LAKE_BUCKET\"], \"Condition\": { \"StringLike\": { \"s3:prefix\": [\"lake/*\", \"lake/\"] } } }
+  ]
+}
+POLICY
+    mc admin policy create local trace-lake-rw /tmp/trace-lake-rw.json >/dev/null \
+    && (mc admin user add local '$LAKE_S3_USER' '$LAKE_S3_PASSWORD' >/dev/null) \
+    && (mc admin policy attach local trace-lake-rw --user '$LAKE_S3_USER' >/dev/null 2>&1 || true)"
+  echo "OK: bucket hồ dữ liệu '$LAKE_BUCKET' và tài khoản '$LAKE_S3_USER' cho trace-api (ghi/đọc lake/*)."
+fi
+
 # Policy MinIO cho các vai trò Keycloak (claim "policy" = tên role = tên policy), tách quyền ghi dữ liệu IoT:
 #   admin, editor (bí danh tạm), producer, coop-officer, ocop-officer: SINH từ config/access.json (xem bên dưới)
 #   iot-writer  chỉ PutObject vào THƯ MỤC RIÊNG của gateway: iot/${jwt:preferred_username}/* (= service-account-<client>),
@@ -190,7 +211,7 @@ docker exec dxos-minio sh -c "mc alias set local http://localhost:9000 '$MINIO_R
   \"Statement\": [
     { \"Effect\": \"Allow\", \"Action\": [\"s3:GetObject\", \"s3:GetBucketLocation\"], \"Resource\": [\"arn:aws:s3:::*\"] },
     { \"Effect\": \"Deny\", \"Action\": [\"admin:CreateUser\"], \"Resource\": [\"arn:aws:s3:::*\"] },
-    { \"Effect\": \"Deny\", \"Action\": [\"s3:*\"], \"Resource\": [\"arn:aws:s3:::$DOCS_BUCKET\", \"arn:aws:s3:::$DOCS_BUCKET/*\", \"arn:aws:s3:::$ANCHOR_BUCKET\", \"arn:aws:s3:::$ANCHOR_BUCKET/*\"] }
+    { \"Effect\": \"Deny\", \"Action\": [\"s3:*\"], \"Resource\": [\"arn:aws:s3:::$DOCS_BUCKET\", \"arn:aws:s3:::$DOCS_BUCKET/*\", \"arn:aws:s3:::$ANCHOR_BUCKET\", \"arn:aws:s3:::$ANCHOR_BUCKET/*\", \"arn:aws:s3:::$LAKE_BUCKET\", \"arn:aws:s3:::$LAKE_BUCKET/*\"] }
   ]
 }
 POLICY
@@ -198,7 +219,7 @@ POLICY
 # Policy của admin/editor và các vai trò nghiệp vụ (producer, coop-officer, ocop-officer): SINH từ config/access.json.
 # Tên policy = tên role Keycloak. Mọi policy đều Deny ghi/xóa/đổi khóa/bypass trên bucket IoT; vai trò nghiệp vụ chỉ được ĐỌC bucket IoT.
 GEN_DIR="scripts/.generated/minio-policies"
-GEN_ROLES=$(node scripts/gen-access.js minio "$GEN_DIR" "$IOT_BUCKET" "$MINIO_BUCKET" "$DOCS_BUCKET" "$ANCHOR_BUCKET")
+GEN_ROLES=$(node scripts/gen-access.js minio "$GEN_DIR" "$IOT_BUCKET" "$MINIO_BUCKET" "$DOCS_BUCKET" "$ANCHOR_BUCKET" "$LAKE_BUCKET")
 docker exec dxos-minio sh -c "rm -rf /tmp/policies && mkdir -p /tmp/policies"
 docker cp "$GEN_DIR/." dxos-minio:/tmp/policies/
 docker exec dxos-minio sh -c "mc alias set local http://localhost:9000 '$MINIO_ROOT_USER' '$MINIO_ROOT_PASSWORD' >/dev/null; for f in /tmp/policies/*.json; do n=\${f##*/}; n=\${n%.json}; mc admin policy create local \"\$n\" \"\$f\" >/dev/null || exit 1; done"
@@ -221,7 +242,7 @@ curl -fsS -X PUT "$ADMIN/routes/s3" -H "X-API-KEY: $APISIX_ADMIN_KEY" -d @- <<JS
   "hosts": ["s3.localhost", "apisix"],
   "plugins": {
     ${AUDIT_LOGGER},
-    "serverless-pre-function": { "phase": "rewrite", "functions": ["return function(conf, ctx) local a = ngx.req.get_uri_args(); if a['retention'] ~= nil or a['legal-hold'] ~= nil or a['object-lock'] ~= nil or ngx.req.get_headers()['x-amz-bypass-governance-retention'] ~= nil then return 403, {error = 'Khong duoc phep thay doi khoa/giu du lieu (Object Lock) qua cong nay'} end; local p = ngx.var.uri or ''; if p == '/${DOCS_BUCKET}' or p:find('/${DOCS_BUCKET}/', 1, true) == 1 then return 403, {error = 'Kho tep dinh kem chi truy cap qua API nghiep vu'} end; if p == '/${ANCHOR_BUCKET}' or p:find('/${ANCHOR_BUCKET}/', 1, true) == 1 then return 403, {error = 'Kho ban neo chi truy cap qua API nghiep vu'} end end"] }
+    "serverless-pre-function": { "phase": "rewrite", "functions": ["return function(conf, ctx) local a = ngx.req.get_uri_args(); if a['retention'] ~= nil or a['legal-hold'] ~= nil or a['object-lock'] ~= nil or ngx.req.get_headers()['x-amz-bypass-governance-retention'] ~= nil then return 403, {error = 'Khong duoc phep thay doi khoa/giu du lieu (Object Lock) qua cong nay'} end; local p = ngx.var.uri or ''; if p == '/${DOCS_BUCKET}' or p:find('/${DOCS_BUCKET}/', 1, true) == 1 then return 403, {error = 'Kho tep dinh kem chi truy cap qua API nghiep vu'} end; if p == '/${ANCHOR_BUCKET}' or p:find('/${ANCHOR_BUCKET}/', 1, true) == 1 then return 403, {error = 'Kho ban neo chi truy cap qua API nghiep vu'} end; if p == '/${LAKE_BUCKET}' or p:find('/${LAKE_BUCKET}/', 1, true) == 1 then return 403, {error = 'Ho du lieu chi truy cap qua API phan tich'} end end"] }
   },
   "upstream": { "type": "roundrobin", "pass_host": "pass", "nodes": { "minio:9000": 1 } }
 }

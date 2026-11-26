@@ -2,12 +2,12 @@
 // Copyright 2026 The Làng Nghề Số contributors
 "use strict";
 /**
- * Hồ dữ liệu phân tích (nguyên lý "dữ liệu về hồ để phân tích") và truy vết nguồn gốc dữ liệu (lineage).
- *
- * Xuất các bộ dữ liệu đã làm sạch từ PostgreSQL (tầng nóng) và từ kho lạnh (NDJSON của vòng đời dữ liệu) sang tệp Parquet trong MinIO
- * (bucket tệp, tiền tố lake/), rồi truy vấn phân tích bằng DuckDB trực tiếp trên tệp Parquet. Mỗi lần xuất ghi một dòng truy vết
- * (bảng lake_runs): bộ dữ liệu, số dòng, cột, khóa đối tượng, băm SHA-256 và NGUỒN đầu vào (bảng nào, tệp lưu trữ nào kèm băm).
- * Truy vấn phân tích là các mẫu CỐ ĐỊNH (không nhận SQL tùy ý từ người dùng).
+ * Hồ dữ liệu phân tích (Lakehouse):
+ * - Xuất các bộ dữ liệu từ PostgreSQL và kho lạnh sang Parquet nén ZSTD lưu tại bucket riêng (`dxos-lake`),
+ *   phân vùng theo chuẩn Hive (`lake/<dataset>/coop=<coop>/year=<YYYY>/month=<MM>/part-<stamp>-<hash>.parquet`)
+ *   kèm tệp manifest JSON chứa danh sách phân vùng và mã băm SHA-256 kiểm chứng toàn vẹn.
+ * - Khi truy vấn phân tích (`runAnalytics`), lọc phân vùng (`filterPartitions`) theo `coop`, `year`, `month`
+ *   TRƯỚC khi đọc tệp Parquet hoặc dùng DuckDB `httpfs` / `read_parquet([...], hive_partitioning=true)`.
  */
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -16,7 +16,7 @@ const path = require("node:path");
 const { DuckDBInstance } = require("@duckdb/node-api");
 
 const sha256 = (b) => crypto.createHash("sha256").update(b).digest("hex");
-const LOCK_KEY = 727003; // khóa tư vấn: một lần xuất tại một thời điểm
+const LOCK_KEY = 727003;
 
 /** Chạy hàm với một kết nối DuckDB trong bộ nhớ, luôn đóng sau khi xong. */
 async function withDuck(fn) {
@@ -31,7 +31,7 @@ async function withDuck(fn) {
 }
 
 const tmpFile = (ext) => path.join(os.tmpdir(), `dxos-lake-${process.pid}-${crypto.randomBytes(6).toString("hex")}.${ext}`);
-const quote = (p) => `'${p.replace(/\\/g, "/").replace(/'/g, "''")}'`;
+const quote = (p) => `'${String(p).replace(/\\/g, "/").replace(/'/g, "''")}'`;
 const SQL_TYPES = new Set(["VARCHAR", "INTEGER", "BIGINT", "DOUBLE", "BOOLEAN", "DATE", "TIMESTAMP"]);
 
 /** Chuẩn hóa giá trị JS cho DuckDB theo kiểu cột (null giữ nguyên). */
@@ -54,7 +54,7 @@ function cell(type, v) {
   }
 }
 
-/** Ghi các dòng thành tệp Parquet (trả Buffer). columns: [{ name, type }]. Dùng bảng tạm trong DuckDB rồi COPY ra tệp tạm. */
+/** Ghi các dòng thành tệp Parquet (trả Buffer). columns: [{ name, type }]. */
 async function toParquet(columns, rows) {
   for (const c of columns) {
     if (!/^[a-z_][a-z0-9_]*$/.test(c.name) || !SQL_TYPES.has(c.type)) throw new Error(`cột không hợp lệ: ${c.name} ${c.type}`);
@@ -85,24 +85,96 @@ async function toParquet(columns, rows) {
   }
 }
 
-/** Chạy một truy vấn (mẫu cố định, chứa {FILE}) trên nội dung Parquet; trả mảng đối tượng với số đã đổi từ chuỗi/BigInt. */
+function normalizeJsonRows(res) {
+  return res.getRowObjectsJson().map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v])));
+}
+
+/** Chạy một truy vấn cố định (`{FILE}`) trên nội dung một Buffer Parquet. */
 async function queryParquet(buf, sqlTemplate) {
   const file = tmpFile("parquet");
   fs.writeFileSync(file, buf);
   try {
     return await withDuck(async (conn) => {
       const res = await conn.runAndReadAll(sqlTemplate.split("{FILE}").join(`read_parquet(${quote(file)})`));
-      return res.getRowObjectsJson().map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v])));
+      return normalizeJsonRows(res);
     });
   } finally {
     fs.rmSync(file, { force: true });
   }
 }
 
+/** Cấu hình DuckDB `httpfs` để đọc trực tiếp từ MinIO/S3 (khi bật LAKE_DUCKDB_HTTPFS=true). */
+async function configureHttpfs(conn, s3Cfg) {
+  const u = new URL(s3Cfg.endpoint);
+  await conn.run("INSTALL httpfs; LOAD httpfs;");
+  await conn.run(`SET s3_endpoint=${quote(u.host)};`);
+  await conn.run(`SET s3_use_ssl=${u.protocol === "https:" ? "true" : "false"};`);
+  await conn.run("SET s3_url_style='path';");
+  await conn.run(`SET s3_access_key_id=${quote(s3Cfg.accessKey)};`);
+  await conn.run(`SET s3_secret_access_key=${quote(s3Cfg.secretKey)};`);
+}
+
+/** Truy vấn DuckDB trên nhiều tệp Parquet đã cắt tỉa theo phân vùng Hive (`hive_partitioning=true`). */
+async function queryParquetFiles(files, sqlTemplate) {
+  if (!files.length) return [];
+  const listSql = `[${files.map(quote).join(", ")}]`;
+  return withDuck(async (conn) => {
+    const res = await conn.runAndReadAll(sqlTemplate.split("{FILE}").join(`read_parquet(${listSql}, hive_partitioning=true)`));
+    return normalizeJsonRows(res);
+  });
+}
+
+// ---------- Phân vùng Hive ----------
+function sanitizePartition(v) {
+  const s = String(v ?? "")
+    .trim()
+    .replace(/[^A-Za-z0-9_-]/g, "_");
+  return s || "_none";
+}
+
+function partitionOf(row, dateField, coopField, fallbackDate = new Date()) {
+  const coop = coopField ? sanitizePartition(row[coopField]) : "_system";
+  const rawDate = row[dateField];
+  const d = rawDate ? new Date(rawDate) : fallbackDate;
+  const iso = Number.isNaN(d.getTime()) ? fallbackDate.toISOString() : d.toISOString();
+  return { coop, year: iso.slice(0, 4), month: iso.slice(5, 7) };
+}
+
+function partitionKey(dataset, part, stamp, hash8) {
+  return `lake/${dataset}/coop=${part.coop}/year=${part.year}/month=${part.month}/part-${stamp}-${hash8}.parquet`;
+}
+
+function filterPartitions(partitions, filters = {}) {
+  return (partitions ?? []).filter((p) => {
+    if (filters.coop && p.coop !== sanitizePartition(filters.coop)) return false;
+    if (filters.year && p.year !== String(filters.year)) return false;
+    if (filters.month && p.month !== String(filters.month).padStart(2, "0")) return false;
+    return true;
+  });
+}
+
+function groupByPartition(rows, dateField, coopField, now = new Date()) {
+  const groups = new Map();
+  for (const r of rows) {
+    const part = partitionOf(r, dateField, coopField, now);
+    const id = `${part.coop}|${part.year}|${part.month}`;
+    let g = groups.get(id);
+    if (!g) groups.set(id, (g = { ...part, rows: [] }));
+    g.rows.push(r);
+  }
+  if (groups.size === 0) {
+    const iso = now.toISOString();
+    groups.set("empty", { coop: "_empty", year: iso.slice(0, 4), month: iso.slice(5, 7), rows: [] });
+  }
+  return [...groups.values()];
+}
+
 // ---------- Bộ dữ liệu ----------
 const DATASETS = {
   applications: {
     title: "Hồ sơ OCOP",
+    partitionDateField: "created_at",
+    partitionCoopField: "coop",
     columns: [
       { name: "code", type: "VARCHAR" }, { name: "product_name", type: "VARCHAR" }, { name: "product_group", type: "VARCHAR" },
       { name: "owner", type: "VARCHAR" }, { name: "coop", type: "VARCHAR" }, { name: "state", type: "VARCHAR" },
@@ -121,21 +193,24 @@ const DATASETS = {
   },
   application_history: {
     title: "Lịch sử xử lý hồ sơ (nóng và lạnh)",
+    partitionDateField: "created_at",
+    partitionCoopField: "coop",
     columns: [
-      { name: "application", type: "VARCHAR" }, { name: "action", type: "VARCHAR" }, { name: "from_state", type: "VARCHAR" }, { name: "to_state", type: "VARCHAR" },
+      { name: "application", type: "VARCHAR" }, { name: "coop", type: "VARCHAR" }, { name: "action", type: "VARCHAR" }, { name: "from_state", type: "VARCHAR" }, { name: "to_state", type: "VARCHAR" },
       { name: "actor", type: "VARCHAR" }, { name: "created_at", type: "TIMESTAMP" }, { name: "tier", type: "VARCHAR" },
     ],
     async collect({ pool, readArchive }) {
       const hot = (
         await pool.query(
-          `SELECT a.code AS application, h.action, h.from_state, h.to_state, h.actor, h.created_at FROM ocop_application_history h JOIN ocop_applications a ON a.id = h.application_id ORDER BY h.id`,
+          `SELECT a.code AS application, c.code AS coop, h.action, h.from_state, h.to_state, h.actor, h.created_at
+           FROM ocop_application_history h JOIN ocop_applications a ON a.id = h.application_id LEFT JOIN cooperatives c ON c.id = a.coop_id ORDER BY h.id`,
         )
       ).rows.map((r) => ({ ...r, tier: "hot" }));
       const lineage = [{ source: "postgres:ocop_application_history", rows: hot.length, tier: "hot" }];
       const cold = [];
       for (const run of (await pool.query("SELECT id, object_key, sha256, row_count FROM archive_runs ORDER BY id")).rows) {
-        const data = await readArchive(run.id); // đã kiểm băm theo sổ lưu trữ
-        for (const r of data) cold.push({ application: r.application, action: r.action, from_state: r.from_state, to_state: r.to_state, actor: r.actor, created_at: r.created_at, tier: "cold" });
+        const data = await readArchive(run.id);
+        for (const r of data) cold.push({ application: r.application, coop: r.coop ?? null, action: r.action, from_state: r.from_state, to_state: r.to_state, actor: r.actor, created_at: r.created_at, tier: "cold" });
         lineage.push({ source: `minio:${run.object_key}`, sha256: run.sha256, rows: data.length, tier: "cold", archive_run: run.id });
       }
       return { rows: [...hot, ...cold], lineage };
@@ -143,14 +218,18 @@ const DATASETS = {
   },
   kiln_runs: {
     title: "Mẻ nung và mẻ nhuộm có bằng chứng cảm biến",
+    partitionDateField: "started_at",
+    partitionCoopField: "coop",
     columns: [
-      { name: "product_code", type: "VARCHAR" }, { name: "category", type: "VARCHAR" }, { name: "device_id", type: "VARCHAR" }, { name: "started_at", type: "TIMESTAMP" },
+      { name: "product_code", type: "VARCHAR" }, { name: "coop", type: "VARCHAR" }, { name: "category", type: "VARCHAR" }, { name: "device_id", type: "VARCHAR" }, { name: "started_at", type: "TIMESTAMP" },
       { name: "ended_at", type: "TIMESTAMP" }, { name: "peak", type: "DOUBLE" }, { name: "avg_temp", type: "DOUBLE" }, { name: "min_temp", type: "DOUBLE" },
       { name: "samples", type: "INTEGER" }, { name: "coverage", type: "DOUBLE" }, { name: "verdict", type: "VARCHAR" },
     ],
     async collect({ pool, kiln }) {
       const { rows } = await pool.query(
-        `SELECT p.code AS product_code, p.category, e.iot FROM trace_events e JOIN products p ON p.id = e.product_id WHERE e.iot IS NOT NULL ORDER BY e.id`,
+        `SELECT p.code AS product_code, c.code AS coop, p.category, e.iot
+         FROM trace_events e JOIN products p ON p.id = e.product_id LEFT JOIN cooperatives c ON c.id = p.coop_id
+         WHERE e.iot IS NOT NULL ORDER BY e.id`,
       );
       const out = rows.map((r) => {
         const iot = r.iot;
@@ -161,7 +240,7 @@ const DATASETS = {
           verdict = null;
         }
         return {
-          product_code: r.product_code, category: r.category, device_id: iot.deviceId, started_at: iot.from, ended_at: iot.to,
+          product_code: r.product_code, coop: r.coop, category: r.category, device_id: iot.deviceId, started_at: iot.from, ended_at: iot.to,
           peak: iot.max, avg_temp: iot.avg, min_temp: iot.min, samples: iot.count, coverage: iot.quality?.coverage ?? null, verdict,
         };
       });
@@ -170,6 +249,8 @@ const DATASETS = {
   },
   audit_events: {
     title: "Nhật ký kiểm toán (đã bỏ nội dung nhạy cảm)",
+    partitionDateField: "ts",
+    partitionCoopField: null,
     columns: [
       { name: "id", type: "BIGINT" }, { name: "ts", type: "TIMESTAMP" }, { name: "actor", type: "VARCHAR" }, { name: "verified", type: "BOOLEAN" },
       { name: "method", type: "VARCHAR" }, { name: "route", type: "VARCHAR" }, { name: "status", type: "INTEGER" }, { name: "latency_ms", type: "INTEGER" },
@@ -195,8 +276,8 @@ const ANALYTICS = {
 };
 
 /**
- * Xuất mọi bộ dữ liệu sang Parquet. deps: { pool, s3, kiln: { analyze, pickProfile, config }, readArchive(id) }.
- * Mỗi tệp được ĐỌC LẠI từ MinIO và đối chiếu băm trước khi ghi sổ truy vết. Trả { skipped: "busy" } nếu đang có lần xuất khác.
+ * Xuất mọi bộ dữ liệu sang Parquet phân vùng Hive (`lake/<dataset>/coop=.../year=YYYY/month=MM/`).
+ * Mỗi phân vùng được đọc lại đối chiếu SHA-256 rồi ghi vào manifest JSON trước khi lưu sổ truy vết `lake_runs`.
  */
 async function exportAll(deps, triggeredBy, now = new Date()) {
   const { pool, s3 } = deps;
@@ -210,16 +291,29 @@ async function exportAll(deps, triggeredBy, now = new Date()) {
     const results = [];
     for (const [name, ds] of Object.entries(DATASETS)) {
       const { rows, lineage } = await ds.collect(deps);
-      const buf = await toParquet(ds.columns, rows);
-      const hash = sha256(buf);
-      const key = `lake/${name}/dt=${now.toISOString().slice(0, 10)}/${name}-${stamp}-${hash.slice(0, 8)}.parquet`;
-      await s3.putObject(key, buf, "application/vnd.apache.parquet");
-      if (sha256(await s3.getObjectBuffer(key)) !== hash) throw new Error(`Tệp ${key} đọc lại không khớp băm, hủy`);
+      const groups = groupByPartition(rows, ds.partitionDateField, ds.partitionCoopField, now);
+      const partitions = [];
+      let totalSize = 0;
+      for (const g of groups) {
+        const buf = await toParquet(ds.columns, g.rows);
+        const hash = sha256(buf);
+        const key = partitionKey(name, g, stamp, hash.slice(0, 8));
+        await s3.putObject(key, buf, "application/vnd.apache.parquet");
+        if (sha256(await s3.getObjectBuffer(key)) !== hash) throw new Error(`Tệp ${key} đọc lại không khớp băm, hủy`);
+        partitions.push({ coop: g.coop, year: g.year, month: g.month, key, sha256: hash, rows: g.rows.length, size: buf.length });
+        totalSize += buf.length;
+      }
+      const manifestBuf = Buffer.from(JSON.stringify({ format: "hive-parquet-v1", dataset: name, created_at: now.toISOString(), partitions }, null, 2));
+      const manifestHash = sha256(manifestBuf);
+      const manifestKey = `lake/${name}/_manifests/run-${stamp}-${manifestHash.slice(0, 8)}.json`;
+      await s3.putObject(manifestKey, manifestBuf, "application/json");
+      if (sha256(await s3.getObjectBuffer(manifestKey)) !== manifestHash) throw new Error(`Manifest ${manifestKey} đọc lại không khớp băm, hủy`);
+      const fullLineage = [...lineage, { format: "hive-parquet-v1", partitions: partitions.length }];
       const { rows: ins } = await client.query(
         "INSERT INTO lake_runs (dataset, rows, object_key, sha256, size, columns, lineage, triggered_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id",
-        [name, rows.length, key, hash, buf.length, JSON.stringify(ds.columns), JSON.stringify(lineage), triggeredBy],
+        [name, rows.length, manifestKey, manifestHash, totalSize, JSON.stringify(ds.columns), JSON.stringify(fullLineage), triggeredBy],
       );
-      results.push({ dataset: name, run_id: ins[0].id, rows: rows.length, object_key: key, sha256: hash, size: buf.length });
+      results.push({ dataset: name, run_id: ins[0].id, rows: rows.length, object_key: manifestKey, sha256: manifestHash, size: totalSize, partitions: partitions.length });
     }
     return { exported: results };
   } finally {
@@ -241,15 +335,71 @@ async function overview(pool) {
   return { datasets: out, analytics: Object.entries(ANALYTICS).map(([id, a]) => ({ id, title: a.title, dataset: a.dataset })) };
 }
 
-/** Chạy một truy vấn phân tích trên Parquet mới nhất của bộ dữ liệu; kiểm băm theo sổ truy vết trước khi dùng. */
-async function runAnalytics(pool, s3, name) {
+/** Chạy truy vấn phân tích trên phân vùng đã cắt tỉa (`coop`, `year`, `month`); tương thích ngược với Parquet đơn lẻ cũ. */
+async function runAnalytics(pool, s3, name, filters = {}) {
   const a = ANALYTICS[name];
   if (!a) return null;
   const { rows } = await pool.query("SELECT id, object_key, sha256, created_at FROM lake_runs WHERE dataset = $1 ORDER BY id DESC LIMIT 1", [a.dataset]);
   if (!rows.length) return { id: name, title: a.title, dataset: a.dataset, exported: false, rows: [] };
-  const buf = await s3.getObjectBuffer(rows[0].object_key);
-  if (sha256(buf) !== rows[0].sha256) throw new Error("Tệp Parquet không khớp băm trong sổ truy vết");
-  return { id: name, title: a.title, dataset: a.dataset, exported: true, from_run: rows[0].id, sha256: rows[0].sha256, as_of: rows[0].created_at, rows: await queryParquet(buf, a.sql) };
+  const headBuf = await s3.getObjectBuffer(rows[0].object_key);
+  if (sha256(headBuf) !== rows[0].sha256) throw new Error("Tệp xuất không khớp băm trong sổ truy vết");
+
+  if (!rows[0].object_key.endsWith(".json")) {
+    return { id: name, title: a.title, dataset: a.dataset, exported: true, from_run: rows[0].id, sha256: rows[0].sha256, as_of: rows[0].created_at, rows: await queryParquet(headBuf, a.sql) };
+  }
+
+  const manifest = JSON.parse(headBuf.toString("utf8"));
+  const allParts = manifest.partitions ?? [];
+  const picked = filterPartitions(allParts, filters);
+  if (picked.length === 0) {
+    return { id: name, title: a.title, dataset: a.dataset, exported: true, from_run: rows[0].id, sha256: rows[0].sha256, as_of: rows[0].created_at, partitions_total: allParts.length, partitions_scanned: 0, filters, rows: [] };
+  }
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dxos-lake-hive-"));
+  try {
+    const localFiles = [];
+    for (const p of picked) {
+      const pBuf = await s3.getObjectBuffer(p.key);
+      if (sha256(pBuf) !== p.sha256) throw new Error(`Phân vùng ${p.key} không khớp băm`);
+      const pDir = path.join(dir, `coop=${p.coop}`, `year=${p.year}`, `month=${p.month}`);
+      fs.mkdirSync(pDir, { recursive: true });
+      const filePath = path.join(pDir, path.basename(p.key));
+      fs.writeFileSync(filePath, pBuf);
+      localFiles.push(filePath);
+    }
+    const resultRows = await queryParquetFiles(localFiles, a.sql);
+    return {
+      id: name,
+      title: a.title,
+      dataset: a.dataset,
+      exported: true,
+      from_run: rows[0].id,
+      sha256: rows[0].sha256,
+      as_of: rows[0].created_at,
+      partitions_total: allParts.length,
+      partitions_scanned: picked.length,
+      filters,
+      rows: resultRows,
+    };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
-module.exports = { DATASETS, ANALYTICS, toParquet, queryParquet, exportAll, overview, runAnalytics, cell };
+module.exports = {
+  DATASETS,
+  ANALYTICS,
+  toParquet,
+  queryParquet,
+  queryParquetFiles,
+  configureHttpfs,
+  sanitizePartition,
+  partitionOf,
+  partitionKey,
+  filterPartitions,
+  groupByPartition,
+  exportAll,
+  overview,
+  runAnalytics,
+  cell,
+};

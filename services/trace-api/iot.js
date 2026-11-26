@@ -11,6 +11,7 @@
  */
 
 const crypto = require("node:crypto");
+const { verifyReading } = require("./iot-signing");
 
 const METRIC = "temperature";
 const MAX_WINDOW_MS = 72 * 3600 * 1000; // tối đa 72 giờ cho một lần nung
@@ -74,7 +75,18 @@ function selectKeys(keys, from, to) {
 
 /** Đọc các dòng NDJSON, giữ mẫu của đúng thiết bị/chỉ số trong khoảng. Bỏ qua dòng lỗi. */
 function collectPoints(bodies, deviceId, from, to) {
+  return collectVerifiedPoints(bodies, deviceId, from, to).pts;
+}
+
+/** Đọc các dòng NDJSON kèm kiểm tra chữ ký số Ed25519 từ thiết bị biên (nếu thiết bị đăng ký publicKey). */
+function collectVerifiedPoints(bodies, deviceId, from, to, sigOpts = {}) {
   const pts = [];
+  let signedSamples = 0;
+  let badSignatures = 0;
+  let unsignedRejected = 0;
+  const pubKey = sigOpts?.publicKey ?? null;
+  const reqSig = sigOpts?.requireSignature === true;
+
   for (const body of bodies) {
     for (const line of body.split("\n")) {
       if (!line.trim()) continue;
@@ -86,11 +98,22 @@ function collectPoints(bodies, deviceId, from, to) {
       }
       const t = Date.parse(r?.timestamp);
       if (r?.deviceId === deviceId && r?.metric === METRIC && Number.isFinite(r.value) && t >= from && t <= to) {
+        if (pubKey && r.sig) {
+          if (!verifyReading(r, pubKey, r.sig)) {
+            badSignatures++;
+            continue;
+          }
+          signedSamples++;
+        } else if (reqSig) {
+          unsignedRejected++;
+          continue;
+        }
         pts.push({ t, v: r.value, name: typeof r.deviceName === "string" ? r.deviceName : "", unit: typeof r.unit === "string" ? r.unit : "" });
       }
     }
   }
-  return pts.sort((a, b) => a.t - b.t);
+  pts.sort((a, b) => a.t - b.t);
+  return { pts, signedSamples, badSignatures, unsignedRejected };
 }
 
 const round1 = (x) => Math.round(x * 10) / 10;
@@ -333,18 +356,127 @@ async function buildEvidence(win, s3, gateway, limits = {}) {
       )),
     );
   }
-  const pts = collectPoints(bodies, win.deviceId, win.from, win.to);
+  const { pts, signedSamples, badSignatures, unsignedRejected } = collectVerifiedPoints(bodies, win.deviceId, win.from, win.to, limits);
   const { accepted, quality } = assess(pts, win.from, win.to, limits);
   quality.overwritten = overwritten;
   quality.deleted = deleted;
+  if (signedSamples > 0 || limits?.publicKey) quality.signedSamples = signedSamples;
+  if (badSignatures > 0) {
+    quality.badSignatures = badSignatures;
+    quality.flags.push("bad-signature");
+  }
+  if (unsignedRejected > 0) {
+    quality.unsignedRejected = unsignedRejected;
+    quality.flags.push("unsigned-sample");
+  }
   if (overwritten) quality.flags.push("object-overwritten");
   if (deleted) quality.flags.push("object-deleted");
   const evidence = summarize(accepted, win.deviceId, win.from, win.to);
   if (!evidence) {
+    if (badSignatures > 0) throw new IotError(422, `Toàn bộ mẫu đo có chữ ký Ed25519 không hợp lệ (${badSignatures} mẫu bị từ chối)`);
+    if (unsignedRejected > 0) throw new IotError(422, `Thiết bị bắt buộc chữ ký số Ed25519 nhưng mẫu đo thiếu chữ ký (${unsignedRejected} mẫu)`);
     if (pts.length) throw new IotError(422, `Toàn bộ ${pts.length} mẫu nằm ngoài khoảng giá trị hợp lý của thiết bị, không dùng được làm bằng chứng`);
     throw new IotError(422, "Không có số liệu cảm biến của thiết bị này trong khoảng thời gian đã nhập");
   }
   return { ...evidence, quality, gateway, verifiedAt: new Date().toISOString() };
 }
 
-module.exports = { IotError, parseWindow, keyTime, folderOf, dayPrefixes, selectKeys, collectPoints, assess, summarize, createS3Client, buildEvidence };
+const MAX_CACHE_ENTRIES = 64;
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function parseNdjsonReadings(body) {
+  const out = [];
+  for (const line of body.split("\n")) {
+    if (!line.trim()) continue;
+    let r;
+    try {
+      r = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (typeof r?.deviceId !== "string" || !Number.isFinite(r?.value) || typeof r?.timestamp !== "string") continue;
+    out.push({
+      deviceId: r.deviceId,
+      deviceName: typeof r.deviceName === "string" ? r.deviceName : r.deviceId,
+      metric: typeof r.metric === "string" ? r.metric : METRIC,
+      value: r.value,
+      unit: typeof r.unit === "string" ? r.unit : "",
+      timestamp: r.timestamp,
+    });
+  }
+  return out;
+}
+
+/**
+ * Đọc các tệp NDJSON mới nhất cho tập thiết bị đã được lọc theo quyền HTX (`allowedDevices`).
+ * Chỉ liệt kê thư mục của các gateway sở hữu thiết bị được phép và lọc chéo `cfg.gateway === gw`.
+ */
+async function readLatestReadings(s3, allowedDevices, opts = {}) {
+  if (!allowedDevices || allowedDevices.size === 0) return { readings: [], objects: 0 };
+  const rawDays = Number.parseInt(opts.maxDays ?? 6, 10);
+  const maxDays = Math.min(14, Math.max(1, Number.isFinite(rawDays) ? rawDays : 6));
+  const cache = opts.cache ?? null;
+  const now = opts.now ?? Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
+
+  const gateways = [...new Set([...allowedDevices.values()].map((d) => d.gateway))];
+  const gwLists = await Promise.all(
+    gateways.map(async (gw) => ({
+      gw,
+      keys: await s3.listKeys(`iot/${folderOf(gw)}/`),
+    })),
+  );
+
+  const byDay = new Map();
+  for (const { gw, keys } of gwLists) {
+    for (const k of keys) {
+      if (!k.endsWith(".ndjson")) continue;
+      const day = k.split("/")[2] ?? "";
+      if (!DAY_RE.test(day)) continue;
+      let gwMap = byDay.get(day);
+      if (!gwMap) byDay.set(day, (gwMap = new Map()));
+      let arr = gwMap.get(gw);
+      if (!arr) gwMap.set(gw, (arr = []));
+      arr.push(k);
+    }
+  }
+
+  const days = [...byDay.keys()].sort().reverse().slice(0, maxDays);
+  const readings = [];
+  const seen = new Set();
+  let objects = 0;
+
+  for (const day of days) {
+    const gwMap = byDay.get(day);
+    for (const [gw, rawKeys] of gwMap.entries()) {
+      const dayKeys = [...rawKeys].sort((a, b) => a.localeCompare(b));
+      const cacheKey = `${gw}/${day}`;
+      let part = cache && day < today ? cache.get(cacheKey) : undefined;
+      if (!part) {
+        const bodies = [];
+        for (let i = 0; i < dayKeys.length; i += 20) {
+          bodies.push(...(await Promise.all(dayKeys.slice(i, i + 20).map((k) => s3.getObject(k)))));
+        }
+        part = bodies.flatMap(parseNdjsonReadings);
+        if (cache && day < today) {
+          if (cache.size >= MAX_CACHE_ENTRIES) {
+            const oldest = cache.keys().next().value;
+            if (oldest !== undefined) cache.delete(oldest);
+          }
+          cache.set(cacheKey, part);
+        }
+      }
+      objects += dayKeys.length;
+      for (const r of part) {
+        const cfg = allowedDevices.get(r.deviceId);
+        if (!cfg || cfg.gateway !== gw) continue;
+        readings.push(r);
+        seen.add(r.deviceId);
+      }
+    }
+    if ([...allowedDevices.keys()].every((id) => seen.has(id))) break;
+  }
+  return { readings, objects };
+}
+
+module.exports = { IotError, parseWindow, keyTime, folderOf, dayPrefixes, selectKeys, collectPoints, collectVerifiedPoints, assess, summarize, createS3Client, buildEvidence, readLatestReadings };

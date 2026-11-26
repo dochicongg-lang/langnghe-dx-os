@@ -81,12 +81,15 @@ export default function AuthProvider({
         const kc = getKeycloak();
         const t = kc.tokenParsed as Record<string, unknown> | undefined;
         if (!kc.authenticated || !t) {
+          document.cookie = "dxos_session=; path=/; max-age=0; SameSite=Lax";
           if (atRoot) router.replace("/gioi-thieu");
           // Đến trang cần đăng nhập bằng điều hướng trong ứng dụng (ví dụ bấm Đăng nhập ở trang giới thiệu sau khi trang gốc đã kiểm tra phiên):
           // lần khởi tạo trước chỉ KIỂM TRA nên không tự chuyển sang đăng nhập; phải gọi đăng nhập tại đây, nếu không trang đứng ở "Đang xác thực".
           else void kc.login({ redirectUri: window.location.href });
           return;
         }
+        // Đã đăng nhập: đánh dấu bằng cookie để lần sau vào "/" đi thẳng vào ứng dụng (máy chủ không phải chuyển sang trang giới thiệu)
+        document.cookie = `dxos_session=1; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${window.location.protocol === "https:" ? "; Secure" : ""}`;
         // Token hết hạn: thử làm mới ngầm; phiên Keycloak đã hết (nghỉ lâu, bị đăng xuất nơi khác) thì báo người dùng đăng nhập lại
         kc.onTokenExpired = () => {
           kc.updateToken(30).catch(() => setExpired(true));
@@ -121,7 +124,8 @@ export default function AuthProvider({
   }, [router]);
 
   const logout = useCallback(() => {
-    getKeycloak().logout({ redirectUri: window.location.origin });
+    document.cookie = "dxos_session=; path=/; max-age=0; SameSite=Lax";
+    getKeycloak().logout({ redirectUri: `${window.location.origin}/gioi-thieu` });
   }, []);
 
   const apiFetch = useCallback(async (path: string, init: RequestInit = {}) => {

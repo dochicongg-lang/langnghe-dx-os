@@ -71,4 +71,26 @@ function createScanner({ host, port = 3310, timeoutMs = 30_000, connect = net.co
   };
 }
 
-module.exports = { ScanError, parseReply, frame, createScanner };
+/**
+ * Chính sách quét mã độc cho tệp tải lên (hàm thuần, có test).
+ *   - Quét được và sạch: { blocked: false, avStatus: "clean", engine: "clamav" }.
+ *   - Phát hiện mã độc: { blocked: true, status: 422 } (luôn chặn, bất kể CLAMAV_REQUIRED).
+ *   - Không quét được (không có ClamAV, mất kết nối...): required=true thì chặn 503 (đóng khi lỗi);
+ *     required=false thì cho qua kèm avStatus "skipped-lite-profile" để ghi vào hồ sơ/nhật ký.
+ */
+async function evaluateScan({ scanner, buf, required }) {
+  if (scanner) {
+    try {
+      const r = await scanner.scan(buf);
+      if (!r.clean) return { blocked: true, status: 422, message: `Tệp bị chặn vì nghi chứa mã độc (${r.signature})` };
+      return { blocked: false, avStatus: "clean", engine: "clamav" };
+    } catch (e) {
+      if (required) return { blocked: true, status: 503, message: "Dịch vụ quét mã độc chưa sẵn sàng, vui lòng thử lại sau ít phút", cause: e.message };
+      return { blocked: false, avStatus: "skipped-lite-profile", engine: null, cause: e.message };
+    }
+  }
+  if (required) return { blocked: true, status: 503, message: "Dịch vụ quét mã độc chưa được cấu hình (CLAMAV_HOST), vui lòng liên hệ quản trị" };
+  return { blocked: false, avStatus: "skipped-lite-profile", engine: null };
+}
+
+module.exports = { ScanError, parseReply, frame, createScanner, evaluateScan };

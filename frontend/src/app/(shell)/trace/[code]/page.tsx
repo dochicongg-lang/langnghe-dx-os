@@ -14,6 +14,7 @@ import QrCode from "@/components/QrCode";
 import ProductImage from "@/components/ProductImage";
 import StageIcon from "@/components/StageIcon";
 import { config } from "@/lib/config";
+import { useSectors } from "@/lib/sectors";
 import { fmtDate, stageLabels, stageOrder, type ProductDetail } from "@/lib/trace";
 
 const inputCls =
@@ -22,6 +23,7 @@ const inputCls =
 function Product() {
   const { code } = useParams<{ code: string }>();
   const { apiFetch } = useAuth();
+  const sectors = useSectors();
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -67,7 +69,11 @@ function Product() {
         if (Number.isNaN(fromMs) || Number.isNaN(toMs)) throw new Error("Cần nhập cả thời điểm bắt đầu và kết thúc.");
         if (toMs <= fromMs) throw new Error("Thời điểm kết thúc phải sau thời điểm bắt đầu.");
         // Chỉ gửi thiết bị và khoảng thời gian; máy chủ tự đọc số liệu từ MinIO và tính tóm tắt.
-        iot = { deviceId: (iotDevice || (product?.sector === "lua" ? "dye-01" : "kiln-01")).trim(), from: new Date(fromMs).toISOString(), to: new Date(toMs).toISOString() };
+        const sec = sectors?.find((s) => s.key === product?.sector);
+        const fallbackDev = sec?.defaultDevice ?? (sec?.devicePrefix ? `${sec.devicePrefix}-01` : "");
+        const pickedDev = (iotDevice || fallbackDev).trim();
+        if (!pickedDev) throw new Error("Cần nhập mã thiết bị cảm biến.");
+        iot = { deviceId: pickedDev, from: new Date(fromMs).toISOString(), to: new Date(toMs).toISOString() };
       }
       const res = await apiFetch(`/api/trace/products/${encodeURIComponent(code)}/events`, {
         method: "POST",
@@ -102,7 +108,8 @@ function Product() {
   // chuỗi công đoạn của NGÀNH sản phẩm này (gốm, lụa...), do máy chủ trả về
   const stages = product.stages ?? stageOrder.map((k) => ({ key: k, label: stageLabels[k] }));
   const locationSug = uniqueSuggestions(product.events.map((e) => e.location));
-  const dyeing = product.sector === "lua"; // ngành lụa: công đoạn gắn cảm biến là nhuộm, thiết bị là bể nhuộm
+  const sectorCfg = sectors?.find((s) => s.key === product.sector);
+  const defaultDevice = sectorCfg?.defaultDevice ?? (sectorCfg?.devicePrefix ? `${sectorCfg.devicePrefix}-01` : "");
   const lbl = (k: string) => stages.find((s) => s.key === k)?.label ?? stageLabels[k] ?? k;
   const publicPath = `/verify/${encodeURIComponent(product.code)}`;
 
@@ -213,21 +220,21 @@ function Product() {
                 </label>
                 {Boolean(product.sensor_stage) && stage === product.sensor_stage && (
                   <fieldset className="space-y-3 rounded-lg border border-brand-200 bg-brand-50/50 p-3">
-                    <legend className="px-1 text-xs font-medium text-brand-700">Gắn dữ liệu cảm biến {dyeing ? "bể nhuộm" : "lò"} (tùy chọn)</legend>
+                    <legend className="px-1 text-xs font-medium text-brand-700">Gắn dữ liệu cảm biến {lbl(stage).toLowerCase()} (tùy chọn)</legend>
                     <label className="block text-sm">
                       <span className="mb-1 block text-stone-600">Mã thiết bị</span>
-                      <input name="iotDevice" maxLength={60} defaultValue={dyeing ? "dye-01" : "kiln-01"} className={inputCls} />
+                      <input key={defaultDevice || "dev"} name="iotDevice" maxLength={60} defaultValue={defaultDevice} placeholder="Ví dụ: kiln-01" className={inputCls} />
                     </label>
                     <label className="block text-sm">
-                      <span className="mb-1 block text-stone-600">{dyeing ? "Bắt đầu nhuộm" : "Bắt đầu nung"}</span>
+                      <span className="mb-1 block text-stone-600">Thời điểm bắt đầu</span>
                       <input name="iotFrom" type="datetime-local" className={inputCls} />
                     </label>
                     <label className="block text-sm">
-                      <span className="mb-1 block text-stone-600">{dyeing ? "Kết thúc nhuộm" : "Kết thúc nung"}</span>
+                      <span className="mb-1 block text-stone-600">Thời điểm kết thúc</span>
                       <input name="iotTo" type="datetime-local" className={inputCls} />
                     </label>
                     <p className="text-xs text-stone-500">
-                      Hệ thống tự lấy nhiệt độ {dyeing ? "bể nhuộm" : "lò"} trong khoảng này từ số liệu cảm biến và gắn đường cong nhiệt đã đối chiếu vào công đoạn. Bỏ trống nếu không cần.
+                      Hệ thống tự lấy số liệu cảm biến của thiết bị trong khoảng này và gắn đường cong nhiệt đã đối chiếu vào công đoạn. Bỏ trống nếu không cần.
                     </p>
                   </fieldset>
                 )}

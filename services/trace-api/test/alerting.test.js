@@ -3,12 +3,12 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { proposeFromKiln, notificationFor } = require("../agent");
+const { proposeFromKiln, notificationFor } = require("../alerting");
 
 const product = { code: "GOM-BT-0002", name: "Bình gốm men lam", coop: "htx-demo" };
 const insight = (verdict, findings = []) => ({ verdict, summary: `Kết luận ${verdict}.`, findings });
 
-test("chỉ đề xuất khi kết luận là cần xem lại hoặc cảnh báo", () => {
+test("chỉ đề xuất cảnh báo khi kết luận là cần xem lại hoặc cảnh báo", () => {
   assert.equal(proposeFromKiln({ product, eventId: 1, insight: insight("ok") }), null);
   assert.equal(proposeFromKiln({ product, eventId: 1, insight: insight("insufficient") }), null);
   assert.equal(proposeFromKiln({ product, eventId: 1, insight: null }), null);
@@ -17,7 +17,15 @@ test("chỉ đề xuất khi kết luận là cần xem lại hoặc cảnh báo
 });
 
 test("đề xuất nêu lý do kèm căn cứ, đối tượng, người nhận và khóa chống trùng theo sự kiện", () => {
-  const p = proposeFromKiln({ product, eventId: 7, insight: insight("alert", [{ level: "alert", text: "Đỉnh nhiệt 1321 độ C vượt ngưỡng." }, { level: "ok", text: "Giữ nhiệt đủ." }, { level: "warn", text: "Gia nhiệt hơi nhanh." }]) });
+  const p = proposeFromKiln({
+    product,
+    eventId: 7,
+    insight: insight("alert", [
+      { level: "alert", text: "Đỉnh nhiệt 1321 độ C vượt ngưỡng." },
+      { level: "ok", text: "Giữ nhiệt đủ." },
+      { level: "warn", text: "Gia nhiệt hơi nhanh." },
+    ]),
+  });
   assert.equal(p.dedupe_key, "kiln:7");
   assert.equal(p.kind, "kiln_review");
   assert.equal(p.subject, "GOM-BT-0002");
@@ -41,6 +49,6 @@ test("thông báo tạo khi được duyệt: khóa riêng theo mã đề xuất
   const p = proposeFromKiln({ product, eventId: 7, insight: insight("alert") });
   const n = notificationFor({ id: 42, action: p.action });
   assert.deepEqual([n.dedupe_key, n.kind, n.level, n.for_role, n.for_coop, n.for_user, n.link], ["agent:42", "agent_kiln", "alert", "coop-officer", "htx-demo", null, "/trace/GOM-BT-0002"]);
-  assert.throws(() => notificationFor({ id: 1, action: { type: "xoa-du-lieu" } }), /không được hỗ trợ/); // chỉ hành động đã biết mới chạy được
+  assert.throws(() => notificationFor({ id: 1, action: { type: "xoa-du-lieu" } }), /không được hỗ trợ/);
   assert.throws(() => notificationFor({ id: 1, action: null }), /không được hỗ trợ/);
 });

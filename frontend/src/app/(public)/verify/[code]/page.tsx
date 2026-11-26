@@ -4,6 +4,7 @@
 
 // Trang tra cứu công khai cho người mua: không đăng nhập, chỉ hiện thông tin được phép công bố.
 // Trình bày như một câu chuyện ba chương (người làm ra, ngọn lửa, chứng nhận); công đoạn thiếu hiện thành khoảng trống nhìn thấy được, không bị giấu.
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import KilnCurve from "@/components/KilnCurve";
@@ -351,13 +352,31 @@ function Verify() {
             </div>
           </div>
 
-          <aside className="mt-6 rounded-2xl border border-stone-200 bg-white p-5 text-sm text-stone-700">
-            <h2 className="text-base font-semibold text-stone-900">Vì sao có thể tin trang này</h2>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
-              <li>Số liệu cảm biến (lò nung, bể nhuộm) được ghi vào kho dữ liệu có khóa chống sửa và chống xóa; nếu bị ghi đè, hệ thống chỉ dùng bản ghi đầu tiên và gắn cờ cảnh báo.</li>
-              <li>Máy chủ tự đọc lại dữ liệu cảm biến để tính nhiệt độ và đường cong, người nhập hồ sơ không gõ tay các con số này.</li>
-              <li>Kết quả OCOP chính thức do cơ quan có thẩm quyền quyết định, được hiển thị tách khỏi xác nhận của nền tảng.</li>
-            </ul>
+          <aside className="mt-6 space-y-4 rounded-2xl border border-stone-200 bg-white p-5 text-sm text-stone-700">
+            {product.gs1 && (
+              <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">Chuẩn Quốc gia TCVN 13274:2020 · GS1 Digital Link &amp; EPCIS 2.0</p>
+                <p className="mt-1 font-mono text-xs text-stone-700">
+                  GTIN-14: <strong>{product.gs1.gtin}</strong> · Digital Link: <Link href={product.gs1.digital_link} className="text-brand-700 hover:underline">{product.gs1.digital_link}</Link>
+                </p>
+                <div className="mt-2.5 flex flex-wrap gap-3 text-xs font-medium">
+                  <a href={product.gs1.epcis_url} target="_blank" rel="noreferrer" className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-stone-800 hover:bg-stone-100">
+                    Tải hồ sơ sự kiện EPCIS 2.0 (JSON-LD)
+                  </a>
+                  <Link href="/danh-ba" className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-stone-700 hover:bg-stone-100">
+                    ← Danh bạ sản phẩm làng nghề
+                  </Link>
+                </div>
+              </div>
+            )}
+            <div>
+              <h2 className="text-base font-semibold text-stone-900">Vì sao có thể tin trang này</h2>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>Số liệu cảm biến (lò nung, bể nhuộm) được ghi vào kho dữ liệu có khóa chống sửa và chống xóa; nếu bị ghi đè, hệ thống chỉ dùng bản ghi đầu tiên và gắn cờ cảnh báo.</li>
+                <li>Máy chủ tự đọc lại dữ liệu cảm biến để tính nhiệt độ, nhiệt tích lũy (Heat Work), so khớp hình dạng đường cong (DTW) và chống phát lại (Replay).</li>
+                <li>Kết quả OCOP chính thức do cơ quan có thẩm quyền quyết định, được hiển thị tách khỏi xác nhận của nền tảng.</li>
+              </ul>
+            </div>
           </aside>
         </main>
       )}
